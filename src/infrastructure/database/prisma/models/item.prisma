@@ -1,0 +1,22 @@
+model Item {
+  id          String   @id @default(uuid())
+  sku         String   @unique
+  name        String
+  description String?
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  @@map("items")
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  aggregateId String
+  eventType   String
+  payload     Json
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+
+  @@index([publishedAt])
+  @@map("outbox_events")
+}
