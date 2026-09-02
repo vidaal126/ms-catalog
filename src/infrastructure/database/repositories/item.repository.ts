@@ -41,17 +41,34 @@ export class ItemRepositoryPrisma implements IItemRepository {
   }
 
   async create(item: ItemEntity): Promise<ItemEntity> {
-    const created = await this.prisma.item.create({
-      data: {
-        sku: item.sku,
-        name: item.name,
-        description: item.description,
-        unitPrice: item.unitPrice,
-      },
+    const created = await this.prisma.$transaction(async (tx) => {
+      const savedItem = await tx.item.create({
+        data: {
+          sku: item.sku,
+          name: item.name,
+          description: item.description,
+          unitPrice: item.unitPrice,
+        },
+      });
+
+      await tx.outboxEvent.create({
+        data: {
+          aggregateId: savedItem.id,
+          eventType: "ItemCreated",
+          payload: {
+            id: savedItem.id,
+            sku: savedItem.sku,
+            name: savedItem.name,
+            unitPrice: savedItem.unitPrice.toNumber(),
+          },
+        },
+      });
+
+      return savedItem;
     });
+
     return this.toDomain(created);
   }
-
   private toDomain(raw: {
     id: string;
     sku: string;
