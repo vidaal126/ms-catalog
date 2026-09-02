@@ -59,7 +59,7 @@ export class ItemRepositoryPrisma implements IItemRepository {
             id: savedItem.id,
             sku: savedItem.sku,
             name: savedItem.name,
-            unitPrice: savedItem.unitPrice.toString(),
+            unitPrice: savedItem.unitPrice.toNumber(),
           },
         },
       });
