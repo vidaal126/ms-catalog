@@ -6,6 +6,11 @@ model Item {
   unitPrice   Decimal  @db.Decimal(10, 2)
   createdAt   DateTime @default(now())
 
+  weightKg  Decimal @db.Decimal(10, 3)
+  lengthCm  Decimal @db.Decimal(10, 2)
+  widthCm   Decimal @db.Decimal(10, 2)
+  heightCm  Decimal @db.Decimal(10, 2)
+
   @@map("items")
 }
 

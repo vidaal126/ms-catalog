@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "items"
+  ADD COLUMN "weightKg" DECIMAL(10,3) NOT NULL,
+  ADD COLUMN "lengthCm" DECIMAL(10,2) NOT NULL,
+  ADD COLUMN "widthCm"  DECIMAL(10,2) NOT NULL,
+  ADD COLUMN "heightCm" DECIMAL(10,2) NOT NULL;

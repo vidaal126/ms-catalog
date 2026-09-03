@@ -1,4 +1,8 @@
 import { Injectable } from "@nestjs/common";
+import {
+  Prisma,
+  type Item as ItemModel,
+} from "@infrastructure/database/generated";
 import { ItemEntity } from "@domain/entities/item.entity";
 import {
   IItemRepository,
@@ -36,6 +40,7 @@ export class ItemRepositoryPrisma implements IItemRepository {
     const items = await this.prisma.item.findMany({
       take: limit,
       skip: (page - 1) * limit,
+      orderBy: { createdAt: "desc" },
     });
     return items.map((i) => this.toDomain(i));
   }
@@ -46,21 +51,34 @@ export class ItemRepositoryPrisma implements IItemRepository {
         data: {
           sku: item.sku,
           name: item.name,
-          description: item.description,
+          description: item.description ?? null,
           unitPrice: item.unitPrice,
+          weightKg: item.weightKg,
+          lengthCm: item.dimensions.lengthCm,
+          widthCm: item.dimensions.widthCm,
+          heightCm: item.dimensions.heightCm,
         },
       });
+
+      const payload: Prisma.InputJsonObject = {
+        schemaVersion: 1,
+        id: savedItem.id,
+        sku: savedItem.sku,
+        name: savedItem.name,
+        unitPrice: savedItem.unitPrice.toNumber(),
+        weightKg: savedItem.weightKg.toNumber(),
+        dimensions: {
+          lengthCm: savedItem.lengthCm.toNumber(),
+          widthCm: savedItem.widthCm.toNumber(),
+          heightCm: savedItem.heightCm.toNumber(),
+        },
+      };
 
       await tx.outboxEvent.create({
         data: {
           aggregateId: savedItem.id,
           eventType: "ItemCreated",
-          payload: {
-            id: savedItem.id,
-            sku: savedItem.sku,
-            name: savedItem.name,
-            unitPrice: savedItem.unitPrice.toNumber(),
-          },
+          payload,
         },
       });
 
@@ -69,20 +87,20 @@ export class ItemRepositoryPrisma implements IItemRepository {
 
     return this.toDomain(created);
   }
-  private toDomain(raw: {
-    id: string;
-    sku: string;
-    name: string;
-    description?: string | null;
-    unitPrice: unknown;
-    createdAt: Date;
-  }): ItemEntity {
-    return ItemEntity.create({
+
+  private toDomain(raw: ItemModel): ItemEntity {
+    return ItemEntity.restore({
       id: raw.id,
       sku: raw.sku,
       name: raw.name,
-      ...(raw.description ? { description: raw.description } : {}),
-      unitPrice: Number(raw.unitPrice),
+      description: raw.description ?? undefined,
+      unitPrice: raw.unitPrice.toNumber(),
+      weightKg: raw.weightKg.toNumber(),
+      dimensions: {
+        lengthCm: raw.lengthCm.toNumber(),
+        widthCm: raw.widthCm.toNumber(),
+        heightCm: raw.heightCm.toNumber(),
+      },
       createdAt: raw.createdAt,
     });
   }
