@@ -1,25 +1,65 @@
+import { Type } from "class-transformer";
 import {
-  IsString,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
+  IsString,
+  Max,
+  MaxLength,
   Min,
+  ValidateNested,
 } from "class-validator";
+
+export class DimensionsDto {
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000)
+  @Type(() => Number)
+  readonly lengthCm!: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000)
+  @Type(() => Number)
+  readonly widthCm!: number;
+
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0.01)
+  @Max(1000)
+  @Type(() => Number)
+  readonly heightCm!: number;
+}
 
 export class CreateItemDto {
   @IsString()
   @IsNotEmpty()
-  sku!: string;
+  @MaxLength(64)
+  readonly sku!: string;
 
   @IsString()
   @IsNotEmpty()
-  name!: string;
+  @MaxLength(255)
+  readonly name!: string;
 
   @IsOptional()
   @IsString()
-  description?: string;
+  @MaxLength(2000)
+  readonly description?: string;
 
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
-  unitPrice!: number;
+  @Type(() => Number)
+  readonly unitPrice!: number;
+
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
+  @Max(1000)
+  @Type(() => Number)
+  readonly weightKg!: number;
+
+  @IsObject()
+  @ValidateNested()
+  @Type(() => DimensionsDto)
+  readonly dimensions!: DimensionsDto;
 }

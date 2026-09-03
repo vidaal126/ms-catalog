@@ -6,12 +6,23 @@ import { AppModule } from "./app.module";
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+
   app.useLogger(app.get(Logger));
+
   app.useGlobalPipes(
-    new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }),
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transformOptions: { enableImplicitConversion: false },
+    }),
   );
+
+  app.enableShutdownHooks();
+
   const config = app.get(ConfigService);
-  const port = config.get<number>("PORT", 3000);
+  const port = Number(config.get("PORT") ?? 3000);
+
   await app.listen(port);
 }
 

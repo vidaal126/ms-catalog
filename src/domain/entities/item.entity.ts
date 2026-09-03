@@ -1,4 +1,7 @@
-import { BaseEntity } from "./base.entity";
+import {
+  Dimensions,
+  DimensionsProps,
+} from "@domain/value-objects/dimensions.value-object";
 
 export class InvalidItemPriceError extends Error {
   constructor() {
@@ -7,41 +10,101 @@ export class InvalidItemPriceError extends Error {
   }
 }
 
-export class ItemEntity {
-  readonly id?: string;
+export class InvalidItemWeightError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidItemWeightError";
+  }
+}
+
+interface ItemBaseProps {
   readonly sku: string;
   readonly name: string;
   readonly description?: string;
   readonly unitPrice: number;
+  readonly weightKg: number;
+  readonly dimensions: DimensionsProps;
   readonly createdAt: Date;
+}
 
-  private constructor(props: {
-    id?: string;
-    sku: string;
-    name: string;
-    description?: string;
-    unitPrice: number;
-    createdAt: Date;
-  }) {
-    this.id = props.id;
-    this.sku = props.sku;
-    this.name = props.name;
-    this.description = props.description;
-    this.unitPrice = props.unitPrice;
-    this.createdAt = props.createdAt;
-  }
+export interface CreateItemProps extends ItemBaseProps {
+  readonly id?: string;
+}
 
-  static create(props: {
-    id?: string;
-    sku: string;
-    name: string;
-    description?: string;
-    unitPrice: number;
-    createdAt: Date;
-  }): ItemEntity {
+export interface RestoreItemProps extends ItemBaseProps {
+  readonly id: string;
+}
+
+export class ItemEntity {
+  private static readonly WEIGHT_SCALE = 3;
+  private static readonly MIN_WEIGHT_KG = 0.001;
+  private static readonly MAX_WEIGHT_KG = 1000;
+
+  private constructor(
+    readonly id: string | undefined,
+    readonly sku: string,
+    readonly name: string,
+    readonly description: string | undefined,
+    readonly unitPrice: number,
+    readonly weightKg: number,
+    readonly dimensions: Dimensions,
+    readonly createdAt: Date,
+  ) {}
+
+  static create(props: CreateItemProps): ItemEntity {
     if (props.unitPrice <= 0) {
       throw new InvalidItemPriceError();
     }
-    return new ItemEntity(props);
+
+    ItemEntity.assertValidWeight(props.weightKg);
+
+    return new ItemEntity(
+      props.id,
+      props.sku,
+      props.name,
+      props.description,
+      props.unitPrice,
+      props.weightKg,
+      Dimensions.create(props.dimensions),
+      props.createdAt,
+    );
+  }
+
+  static restore(props: RestoreItemProps): ItemEntity {
+    return new ItemEntity(
+      props.id,
+      props.sku,
+      props.name,
+      props.description,
+      props.unitPrice,
+      props.weightKg,
+      Dimensions.create(props.dimensions),
+      props.createdAt,
+    );
+  }
+
+  private static assertValidWeight(weightKg: number): void {
+    if (!Number.isFinite(weightKg)) {
+      throw new InvalidItemWeightError("weightKg must be a finite number");
+    }
+
+    if (weightKg < ItemEntity.MIN_WEIGHT_KG) {
+      throw new InvalidItemWeightError(
+        `weightKg must be at least ${ItemEntity.MIN_WEIGHT_KG}`,
+      );
+    }
+
+    if (weightKg > ItemEntity.MAX_WEIGHT_KG) {
+      throw new InvalidItemWeightError(
+        `weightKg must not exceed ${ItemEntity.MAX_WEIGHT_KG}`,
+      );
+    }
+
+    const [, decimals = ""] = weightKg.toString().split(".");
+    if (decimals.length > ItemEntity.WEIGHT_SCALE) {
+      throw new InvalidItemWeightError(
+        `weightKg must have at most ${ItemEntity.WEIGHT_SCALE} decimal places`,
+      );
+    }
   }
 }

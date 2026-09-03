@@ -62,6 +62,8 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
         take: this.batchSize,
       });
 
+      const publishedIds: string[] = [];
+
       for (const event of pending) {
         try {
           await this.kafkaProducer.sendMessage(
@@ -75,10 +77,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
             },
           );
 
-          await this.prisma.outboxEvent.update({
-            where: { id: event.id },
-            data: { publishedAt: new Date() },
-          });
+          publishedIds.push(event.id);
 
           this.logger.log(
             `Evento publicado: ${event.eventType} (aggregateId=${event.aggregateId})`,
@@ -86,6 +85,20 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
         } catch (err) {
           this.logger.error(
             `Falha ao publicar evento ${event.id}`,
+            err as Error,
+          );
+        }
+      }
+
+      if (publishedIds.length > 0) {
+        try {
+          await this.prisma.outboxEvent.updateMany({
+            where: { id: { in: publishedIds } },
+            data: { publishedAt: new Date() },
+          });
+        } catch (err) {
+          this.logger.error(
+            `Falha ao marcar ${publishedIds.length} evento(s) como publicado(s)`,
             err as Error,
           );
         }

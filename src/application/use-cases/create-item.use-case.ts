@@ -5,11 +5,19 @@ import {
   ITEM_REPOSITORY,
 } from "../../domain/repositories/item.repository";
 
+export interface CreateItemDimensionsInput {
+  readonly lengthCm: number;
+  readonly widthCm: number;
+  readonly heightCm: number;
+}
+
 export interface CreateItemInput {
-  sku: string;
-  name: string;
-  description?: string;
-  unitPrice: number;
+  readonly sku: string;
+  readonly name: string;
+  readonly description?: string | undefined;
+  readonly unitPrice: number;
+  readonly weightKg: number;
+  readonly dimensions: CreateItemDimensionsInput;
 }
 
 @Injectable()
@@ -29,6 +37,8 @@ export class CreateItemUseCase {
       name: input.name,
       description: input.description,
       unitPrice: input.unitPrice,
+      weightKg: input.weightKg,
+      dimensions: input.dimensions,
       createdAt: new Date(),
     });
 
