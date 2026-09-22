@@ -5,10 +5,12 @@ import {
   type OnModuleInit,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Kafka, Partitioners, type Producer } from "kafkajs";
+import { Kafka, logLevel, Partitioners, type Producer } from "kafkajs";
+import { PinoLogger } from "nestjs-pino";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
 import type { Env } from "@config/env";
 import type { OutboundMessage } from "./event-envelope";
+import { createKafkaLogCreator } from "./kafka-log-creator";
 
 const CONNECTION_TIMEOUT_MS = 3_000;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -23,7 +25,10 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     config: ConfigService<Env, true>,
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
+    // PinoLogger e transient: instancia propria com contexto "kafkajs".
+    kafkaLogger: PinoLogger,
   ) {
+    kafkaLogger.setContext("kafkajs");
     this.kafka = new Kafka({
       clientId: "ms-catalog",
       brokers: config.get("KAFKA_BROKER", { infer: true }),
@@ -35,6 +40,9 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
         initialRetryTime: 300,
         retries: 8,
       },
+      // O nivel efetivo e filtrado pelo Pino (LOG_LEVEL).
+      logLevel: logLevel.DEBUG,
+      logCreator: createKafkaLogCreator(kafkaLogger),
     });
 
     this.producer = this.kafka.producer({
