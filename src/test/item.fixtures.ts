@@ -1,4 +1,9 @@
 import type { CreateItemProps } from "@domain/entities/item.entity";
+import { ItemEntity } from "@domain/entities/item.entity";
+import type {
+  IItemRepository,
+  PersistenceContext,
+} from "@domain/repositories/item.repository";
 
 export function buildCreateItemProps(
   overrides: Partial<CreateItemProps> = {},
@@ -14,4 +19,32 @@ export function buildCreateItemProps(
     createdAt: new Date("2026-09-22T12:00:00.000Z"),
     ...overrides,
   };
+}
+
+export class InMemoryItemRepository implements IItemRepository {
+  readonly items: ItemEntity[] = [];
+  readonly contexts: PersistenceContext[] = [];
+  createError: Error | undefined;
+
+  async findById(id: string): Promise<ItemEntity | undefined> {
+    return this.items.find((i) => i.id === id);
+  }
+
+  async findBySku(sku: string): Promise<ItemEntity | undefined> {
+    return this.items.find((i) => i.sku === sku);
+  }
+
+  async findByIds(ids: string[]): Promise<ItemEntity[]> {
+    return this.items.filter((i) => ids.includes(i.id));
+  }
+
+  async findAll(): Promise<ItemEntity[]> {
+    return [...this.items];
+  }
+
+  async create(item: ItemEntity, context: PersistenceContext): Promise<void> {
+    if (this.createError) throw this.createError;
+    this.items.push(item);
+    this.contexts.push(context);
+  }
 }

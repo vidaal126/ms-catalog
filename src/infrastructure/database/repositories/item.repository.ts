@@ -8,8 +8,10 @@ import { ItemAlreadyExistsError } from "@domain/errors/item.errors";
 import {
   IItemRepository,
   PaginationParams,
+  PersistenceContext,
   resolvePageSize,
 } from "@domain/repositories/item.repository";
+import { toOutboxEventData } from "@infrastructure/database/mappers/outbox-event.mapper";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
 
 const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
@@ -48,16 +50,14 @@ export class ItemRepositoryPrisma implements IItemRepository {
     return items.map((i) => this.toDomain(i));
   }
 
-  async create(item: ItemEntity): Promise<ItemEntity> {
-    const created = await this.transactionalCreate(item);
-    return this.toDomain(created);
-  }
+  async create(item: ItemEntity, context: PersistenceContext): Promise<void> {
+    const events = item.pullDomainEvents();
 
-  private async transactionalCreate(item: ItemEntity): Promise<ItemModel> {
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        const savedItem = await tx.item.create({
+      await this.prisma.$transaction(async (tx) => {
+        await tx.item.create({
           data: {
+            id: item.id,
             sku: item.sku,
             name: item.name,
             description: item.description ?? null,
@@ -66,35 +66,19 @@ export class ItemRepositoryPrisma implements IItemRepository {
             lengthCm: item.dimensions.lengthCm,
             widthCm: item.dimensions.widthCm,
             heightCm: item.dimensions.heightCm,
+            createdAt: item.createdAt,
           },
         });
 
-        const payload: Prisma.InputJsonObject = {
-          schemaVersion: 1,
-          id: savedItem.id,
-          sku: savedItem.sku,
-          name: savedItem.name,
-          unitPrice: savedItem.unitPrice.toNumber(),
-          weightKg: savedItem.weightKg.toNumber(),
-          dimensions: {
-            lengthCm: savedItem.lengthCm.toNumber(),
-            widthCm: savedItem.widthCm.toNumber(),
-            heightCm: savedItem.heightCm.toNumber(),
-          },
-        };
-
-        await tx.outboxEvent.create({
-          data: {
-            aggregateId: savedItem.id,
-            eventType: "ItemCreated",
-            payload,
-          },
-        });
-
-        return savedItem;
+        if (events.length > 0) {
+          await tx.outboxEvent.createMany({
+            data: events.map((event) => toOutboxEventData(event, context)),
+          });
+        }
       });
     } catch (err) {
-      // A unica constraint unica alcancavel aqui e items.sku.
+      // A unica constraint unica alcancavel aqui e items.sku: id do item e do
+      // evento sao UUIDs v4 gerados na aplicacao.
       if (
         err instanceof Prisma.PrismaClientKnownRequestError &&
         err.code === UNIQUE_CONSTRAINT_VIOLATION

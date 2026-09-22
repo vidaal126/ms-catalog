@@ -1,8 +1,10 @@
 import { InvariantViolationError } from "@domain/errors/domain.error";
+import { ItemCreatedEvent } from "@domain/events/item-created.event";
 import {
   Dimensions,
   DimensionsProps,
 } from "@domain/value-objects/dimensions.value-object";
+import { AggregateRoot } from "./aggregate-root";
 
 export class InvalidItemPriceError extends InvariantViolationError {
   constructor() {
@@ -12,7 +14,8 @@ export class InvalidItemPriceError extends InvariantViolationError {
 
 export class InvalidItemWeightError extends InvariantViolationError {}
 
-interface ItemBaseProps {
+interface ItemProps {
+  readonly id: string;
   readonly sku: string;
   readonly name: string;
   readonly description?: string;
@@ -22,21 +25,17 @@ interface ItemBaseProps {
   readonly createdAt: Date;
 }
 
-export interface CreateItemProps extends ItemBaseProps {
-  readonly id?: string;
-}
+export type CreateItemProps = ItemProps;
 
-export interface RestoreItemProps extends ItemBaseProps {
-  readonly id: string;
-}
+export type RestoreItemProps = ItemProps;
 
-export class ItemEntity {
+export class ItemEntity extends AggregateRoot<ItemCreatedEvent> {
   private static readonly WEIGHT_SCALE = 3;
   private static readonly MIN_WEIGHT_KG = 0.001;
   private static readonly MAX_WEIGHT_KG = 1000;
 
   private constructor(
-    readonly id: string | undefined,
+    readonly id: string,
     readonly sku: string,
     readonly name: string,
     readonly description: string | undefined,
@@ -44,7 +43,9 @@ export class ItemEntity {
     readonly weightKg: number,
     readonly dimensions: Dimensions,
     readonly createdAt: Date,
-  ) {}
+  ) {
+    super();
+  }
 
   static create(props: CreateItemProps): ItemEntity {
     if (props.unitPrice <= 0) {
@@ -53,7 +54,7 @@ export class ItemEntity {
 
     ItemEntity.assertValidWeight(props.weightKg);
 
-    return new ItemEntity(
+    const item = new ItemEntity(
       props.id,
       props.sku,
       props.name,
@@ -63,6 +64,20 @@ export class ItemEntity {
       Dimensions.create(props.dimensions),
       props.createdAt,
     );
+
+    item.record(
+      new ItemCreatedEvent(
+        item.id,
+        item.createdAt,
+        item.sku,
+        item.name,
+        item.unitPrice,
+        item.weightKg,
+        item.dimensions.toPrimitives(),
+      ),
+    );
+
+    return item;
   }
 
   static restore(props: RestoreItemProps): ItemEntity {

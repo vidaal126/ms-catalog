@@ -7,6 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
+import { toOutboundMessage } from "./event-envelope";
 import { KafkaProducerService } from "./kafka-producer.service";
 
 // Este é o componente que fecha o padrão Outbox. Sem ele, gravar o evento
@@ -66,16 +67,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
 
       for (const event of pending) {
         try {
-          await this.kafkaProducer.sendMessage(
-            this.topicFor(event.eventType),
-            event.aggregateId,
-            {
-              eventType: event.eventType,
-              aggregateId: event.aggregateId,
-              payload: event.payload,
-              occurredAt: event.createdAt.toISOString(),
-            },
-          );
+          await this.kafkaProducer.send(toOutboundMessage(event));
 
           publishedIds.push(event.id);
 
@@ -106,9 +98,5 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.isPolling = false;
     }
-  }
-
-  private topicFor(eventType: string): string {
-    return `catalog.${eventType}`;
   }
 }

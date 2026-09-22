@@ -7,6 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Kafka, Partitioners, type Producer } from "kafkajs";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
+import type { OutboundMessage } from "./event-envelope";
 
 const CONNECTION_TIMEOUT_MS = 3_000;
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -67,24 +68,25 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     await this.producer.disconnect();
   }
 
-  async sendMessage(
-    topic: string,
-    key: string,
-    value: Record<string, unknown>,
-  ): Promise<void> {
+  async send(message: OutboundMessage): Promise<void> {
     await this.connect();
 
-    this.logger.log(`Sending message to topic ${topic} with key ${key}`);
+    this.logger.log(
+      `Sending message to topic ${message.topic} with key ${message.key}`,
+    );
     await this.producer.send({
-      topic,
+      topic: message.topic,
       messages: [
         {
-          key,
-          value: JSON.stringify(value),
+          key: message.key,
+          value: message.value,
+          headers: { ...message.headers },
         },
       ],
     });
-    this.logger.log(`Message sent to topic ${topic} with key ${key}`);
+    this.logger.log(
+      `Message sent to topic ${message.topic} with key ${message.key}`,
+    );
   }
 
   private async connect(): Promise<void> {

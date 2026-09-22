@@ -17,7 +17,9 @@ model Item {
 model OutboxEvent {
   id          String    @id @default(uuid())
   aggregateId String
-  eventType   String
+  eventType     String
+  schemaVersion Int
+  correlationId String
   payload     Json
   createdAt   DateTime  @default(now())
   publishedAt DateTime?

@@ -22,7 +22,7 @@ describe("ItemRepositoryPrisma.create", () => {
     });
     const repository = new ItemRepositoryPrisma(prismaRejectingWith(p2002));
 
-    await expect(repository.create(item())).rejects.toEqual(
+    await expect(repository.create(item(), { correlationId: "c" })).rejects.toEqual(
       new ItemAlreadyExistsError("BOX-001"),
     );
   });
@@ -31,6 +31,6 @@ describe("ItemRepositoryPrisma.create", () => {
     const down = new Error("connection refused");
     const repository = new ItemRepositoryPrisma(prismaRejectingWith(down));
 
-    await expect(repository.create(item())).rejects.toBe(down);
+    await expect(repository.create(item(), { correlationId: "c" })).rejects.toBe(down);
   });
 });
