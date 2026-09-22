@@ -5,7 +5,7 @@ import {
   toOutboxEventData,
 } from "@infrastructure/database/mappers/outbox-event.mapper";
 import { buildCreateItemProps } from "../../test/item.fixtures";
-import { toOutboundMessage } from "./event-envelope";
+import { toOutboundMessage } from "./outbox-message.mapper";
 
 describe("ItemCreated no outbox -> mensagem Kafka", () => {
   const props = buildCreateItemProps();

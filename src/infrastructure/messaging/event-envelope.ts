@@ -1,7 +1,4 @@
-import type {
-  OutboxEvent,
-  Prisma,
-} from "@infrastructure/database/generated";
+import type { JsonValue } from "@common/json";
 
 export interface EventEnvelope {
   readonly eventId: string;
@@ -10,7 +7,7 @@ export interface EventEnvelope {
   readonly occurredAt: string;
   readonly aggregateId: string;
   readonly correlationId: string;
-  readonly payload: Prisma.JsonValue;
+  readonly payload: JsonValue;
 }
 
 export const EVENT_HEADERS = {
@@ -26,31 +23,19 @@ export interface OutboundMessage {
   readonly headers: Readonly<Record<string, string>>;
 }
 
-export function topicFor(eventType: string): string {
-  return `catalog.${eventType}`;
-}
-
-// O id da linha do outbox e o eventId: estavel entre republicacoes, o que
-// permite ao consumer deduplicar quando o publisher reenvia (at-least-once).
-export function toOutboundMessage(event: OutboxEvent): OutboundMessage {
-  const envelope: EventEnvelope = {
-    eventId: event.id,
-    eventType: event.eventType,
-    schemaVersion: event.schemaVersion,
-    occurredAt: event.createdAt.toISOString(),
-    aggregateId: event.aggregateId,
-    correlationId: event.correlationId,
-    payload: event.payload,
-  };
-
+// Key = aggregateId garante ordem por agregado dentro da particao.
+export function serializeEnvelope(
+  topic: string,
+  envelope: EventEnvelope,
+): OutboundMessage {
   return {
-    topic: topicFor(event.eventType),
-    key: event.aggregateId,
+    topic,
+    key: envelope.aggregateId,
     value: JSON.stringify(envelope),
     headers: {
-      [EVENT_HEADERS.eventType]: event.eventType,
-      [EVENT_HEADERS.schemaVersion]: String(event.schemaVersion),
-      [EVENT_HEADERS.correlationId]: event.correlationId,
+      [EVENT_HEADERS.eventType]: envelope.eventType,
+      [EVENT_HEADERS.schemaVersion]: String(envelope.schemaVersion),
+      [EVENT_HEADERS.correlationId]: envelope.correlationId,
     },
   };
 }

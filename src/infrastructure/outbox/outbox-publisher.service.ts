@@ -7,9 +7,9 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
 import type { Env } from "@config/env";
-import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
-import { toOutboundMessage } from "./event-envelope";
-import { KafkaProducerService } from "./kafka-producer.service";
+import { KafkaProducerService } from "@infrastructure/messaging/kafka-producer.service";
+import { toOutboundMessage } from "./outbox-message.mapper";
+import { OutboxRepository } from "./outbox.repository";
 
 // Este é o componente que fecha o padrão Outbox. Sem ele, gravar o evento
 // na tabela outbox_events não serve pra nada - é só um log morto.
@@ -24,8 +24,7 @@ import { KafkaProducerService } from "./kafka-producer.service";
 // não exactly-once). O idempotent:true do producer protege contra
 // duplicação por retry de rede, mas não contra o processo caindo de
 // verdade no meio - por isso consumidores desse evento PRECISAM ser
-// idempotentes, o mesmo bloqueador de idempotência já mapeado no
-// ARCHITECTURE.md original, agora do lado do consumidor de eventos.
+// idempotentes (o eventId do envelope é estável entre reenvios).
 @Injectable()
 export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   private readonly pollIntervalMs: number;
@@ -34,7 +33,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   private isPolling = false;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly outbox: OutboxRepository,
     private readonly kafkaProducer: KafkaProducerService,
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
     config: ConfigService<Env, true>,
@@ -58,11 +57,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
     this.isPolling = true;
 
     try {
-      const pending = await this.prisma.outboxEvent.findMany({
-        where: { publishedAt: null },
-        orderBy: { createdAt: "asc" },
-        take: this.batchSize,
-      });
+      const pending = await this.outbox.findPending(this.batchSize);
 
       const publishedIds: string[] = [];
 
@@ -74,6 +69,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
 
           this.logger.log(
             `Evento publicado: ${event.eventType} (aggregateId=${event.aggregateId})`,
+            { eventId: event.id, correlationId: event.correlationId },
           );
         } catch (err) {
           this.logger.error(
@@ -85,10 +81,7 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
 
       if (publishedIds.length > 0) {
         try {
-          await this.prisma.outboxEvent.updateMany({
-            where: { id: { in: publishedIds } },
-            data: { publishedAt: new Date() },
-          });
+          await this.outbox.markPublished(publishedIds, new Date());
         } catch (err) {
           this.logger.error(
             `Falha ao marcar ${publishedIds.length} evento(s) como publicado(s)`,

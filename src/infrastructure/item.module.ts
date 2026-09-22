@@ -7,10 +7,12 @@ import { ITEM_REPOSITORY } from "@domain/repositories/item.repository";
 import { ItemRepositoryPrisma } from "@infrastructure/database/repositories/item.repository";
 import { ItemController } from "@infrastructure/http/item.controller";
 import { UuidIdGenerator } from "@infrastructure/identity/uuid-id-generator";
-import { KafkaProducerService } from "@infrastructure/messaging/kafka-producer.service";
-import { OutboxPublisherService } from "@infrastructure/messaging/outbox-publisher.service";
+import { MessagingModule } from "@infrastructure/messaging/messaging.module";
+import { OutboxPublisherService } from "@infrastructure/outbox/outbox-publisher.service";
+import { OutboxRepository } from "@infrastructure/outbox/outbox.repository";
 
 @Module({
+  imports: [MessagingModule],
   controllers: [ItemController],
   providers: [
     { provide: ITEM_REPOSITORY, useClass: ItemRepositoryPrisma },
@@ -18,7 +20,7 @@ import { OutboxPublisherService } from "@infrastructure/messaging/outbox-publish
     CreateItemUseCase,
     GetItemUseCase,
     ListItemsUseCase,
-    KafkaProducerService,
+    OutboxRepository,
     OutboxPublisherService,
   ],
   exports: [ITEM_REPOSITORY],

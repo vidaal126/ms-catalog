@@ -4,52 +4,26 @@ import {
   type OnModuleDestroy,
   type OnModuleInit,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import { Kafka, logLevel, Partitioners, type Producer } from "kafkajs";
-import { PinoLogger } from "nestjs-pino";
+import { type Kafka, Partitioners, type Producer } from "kafkajs";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
-import type { Env } from "@config/env";
 import type { OutboundMessage } from "./event-envelope";
-import { createKafkaLogCreator } from "./kafka-log-creator";
-
-const CONNECTION_TIMEOUT_MS = 3_000;
-const REQUEST_TIMEOUT_MS = 30_000;
+import { KAFKA_CLIENT } from "./kafka.tokens";
 
 @Injectable()
 export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
-  private readonly kafka: Kafka;
   private readonly producer: Producer;
   private isConnected = false;
   private connecting: Promise<void> | null = null;
 
   constructor(
-    config: ConfigService<Env, true>,
+    @Inject(KAFKA_CLIENT) kafka: Kafka,
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
-    // PinoLogger e transient: instancia propria com contexto "kafkajs".
-    kafkaLogger: PinoLogger,
   ) {
-    kafkaLogger.setContext("kafkajs");
-    this.kafka = new Kafka({
-      clientId: "ms-catalog",
-      brokers: config.get("KAFKA_BROKER", { infer: true }),
-      // Timeout explícito por tentativa: sem ele o socket fica pendurado
-      // esperando a rede responder eventualmente.
-      connectionTimeout: CONNECTION_TIMEOUT_MS,
-      requestTimeout: REQUEST_TIMEOUT_MS,
-      retry: {
-        initialRetryTime: 300,
-        retries: 8,
-      },
-      // O nivel efetivo e filtrado pelo Pino (LOG_LEVEL).
-      logLevel: logLevel.DEBUG,
-      logCreator: createKafkaLogCreator(kafkaLogger),
-    });
-
-    this.producer = this.kafka.producer({
+    this.producer = kafka.producer({
       idempotent: true,
       // O producer idempotente exige retries ilimitados - qualquer teto invalida
       // a garantia de não-duplicação do broker, e o kafkajs avisa disso se ele
-      // herdar o retries: 8 do client acima.
+      // herdar o retries: 8 do client (KafkaClientFactory).
       retry: { retries: Number.MAX_SAFE_INTEGER },
       // Explícito para fixar o particionador da v2 e silenciar o warning de
       // migração do kafkajs. É o mesmo comportamento padrão desde a v2.0.0.

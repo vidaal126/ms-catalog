@@ -19,6 +19,7 @@ export const envSchema = z.object({
     .min(1)
     .transform((value) => value.split(",").map((broker) => broker.trim()))
     .pipe(z.array(z.string().regex(/^[^\s:]+:\d+$/, "formato host:porta")).min(1)),
+  KAFKA_CLIENT_ID: z.string().min(1).default("ms-catalog"),
 
   OUTBOX_POLL_INTERVAL_MS: positiveInt.default(2000),
   OUTBOX_BATCH_SIZE: positiveInt.max(1000).default(20),
