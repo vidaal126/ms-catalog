@@ -10,14 +10,18 @@ import {
   Query,
 } from "@nestjs/common";
 import { ID_GENERATOR, type IdGenerator } from "@application/ports/id-generator.port";
-import { CreateItemUseCase } from "../../application/use-cases/create-item.use-case";
-import { ItemEntity } from "../../domain/entities/item.entity";
-import { ItemNotFoundError } from "../../domain/errors/item.errors";
-import {
-  IItemRepository,
-  ITEM_REPOSITORY,
-} from "../../domain/repositories/item.repository";
+import { CreateItemUseCase } from "@application/use-cases/create-item.use-case";
+import { GetItemUseCase } from "@application/use-cases/get-item.use-case";
+import { ListItemsUseCase } from "@application/use-cases/list-items.use-case";
 import { CreateItemDto } from "./dto/create-item.dto";
+import type {
+  ItemResponseDto,
+  PaginatedItemsResponseDto,
+} from "./dto/item-response.dto";
+import {
+  toItemResponse,
+  toPaginatedItemsResponse,
+} from "./mappers/item-response.mapper";
 
 const CORRELATION_ID_HEADER = "x-correlation-id";
 // Valor vindo do cliente segue para o evento e para os logs: restringe
@@ -28,7 +32,8 @@ const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 export class ItemController {
   constructor(
     private readonly createItemUseCase: CreateItemUseCase,
-    @Inject(ITEM_REPOSITORY) private readonly itemRepository: IItemRepository,
+    private readonly getItemUseCase: GetItemUseCase,
+    private readonly listItemsUseCase: ListItemsUseCase,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
   ) {}
 
@@ -36,30 +41,28 @@ export class ItemController {
   async create(
     @Body() dto: CreateItemDto,
     @Headers(CORRELATION_ID_HEADER) correlationIdHeader?: string,
-  ): Promise<ItemEntity> {
-    return this.createItemUseCase.execute(dto, {
+  ): Promise<ItemResponseDto> {
+    const item = await this.createItemUseCase.execute(dto, {
       correlationId: this.resolveCorrelationId(correlationIdHeader),
     });
+    return toItemResponse(item);
   }
 
   @Get()
   async findAll(
     @Query("page") page?: string,
     @Query("limit") limit?: string,
-  ): Promise<ItemEntity[]> {
-    return await this.itemRepository.findAll({
+  ): Promise<PaginatedItemsResponseDto> {
+    const output = await this.listItemsUseCase.execute({
       page: page === undefined ? undefined : this.parsePositiveInt(page, "page"),
       limit: limit === undefined ? undefined : this.parsePositiveInt(limit, "limit"),
     });
+    return toPaginatedItemsResponse(output);
   }
 
   @Get(":id")
-  async findById(@Param("id") id: string): Promise<ItemEntity> {
-    const item = await this.itemRepository.findById(id);
-    if (!item) {
-      throw new ItemNotFoundError(id);
-    }
-    return item;
+  async findById(@Param("id") id: string): Promise<ItemResponseDto> {
+    return toItemResponse(await this.getItemUseCase.execute(id));
   }
 
   private resolveCorrelationId(header: string | undefined): string {

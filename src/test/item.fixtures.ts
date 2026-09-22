@@ -2,6 +2,8 @@ import type { CreateItemProps } from "@domain/entities/item.entity";
 import { ItemEntity } from "@domain/entities/item.entity";
 import type {
   IItemRepository,
+  Page,
+  PageRequest,
   PersistenceContext,
 } from "@domain/repositories/item.repository";
 
@@ -38,8 +40,12 @@ export class InMemoryItemRepository implements IItemRepository {
     return this.items.filter((i) => ids.includes(i.id));
   }
 
-  async findAll(): Promise<ItemEntity[]> {
-    return [...this.items];
+  async findAll(request: PageRequest): Promise<Page<ItemEntity>> {
+    const start = (request.page - 1) * request.pageSize;
+    return {
+      items: this.items.slice(start, start + request.pageSize),
+      total: this.items.length,
+    };
   }
 
   async create(item: ItemEntity, context: PersistenceContext): Promise<void> {

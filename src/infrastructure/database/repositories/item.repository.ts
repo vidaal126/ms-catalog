@@ -7,9 +7,9 @@ import { ItemEntity } from "@domain/entities/item.entity";
 import { ItemAlreadyExistsError } from "@domain/errors/item.errors";
 import {
   IItemRepository,
-  PaginationParams,
+  Page,
+  PageRequest,
   PersistenceContext,
-  resolvePageSize,
 } from "@domain/repositories/item.repository";
 import { toOutboxEventData } from "@infrastructure/database/mappers/outbox-event.mapper";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
@@ -39,15 +39,18 @@ export class ItemRepositoryPrisma implements IItemRepository {
     return items.map((i) => this.toDomain(i));
   }
 
-  async findAll(params?: PaginationParams): Promise<ItemEntity[]> {
-    const limit = resolvePageSize(params?.limit);
-    const page = params?.page ?? 1;
-    const items = await this.prisma.item.findMany({
-      take: limit,
-      skip: (page - 1) * limit,
-      orderBy: { createdAt: "desc" },
-    });
-    return items.map((i) => this.toDomain(i));
+  async findAll(request: PageRequest): Promise<Page<ItemEntity>> {
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.item.findMany({
+        take: request.pageSize,
+        skip: (request.page - 1) * request.pageSize,
+        // id como desempate: createdAt pode colidir e, sem ordem total, a
+        // paginacao repete ou pula itens entre paginas.
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      }),
+      this.prisma.item.count(),
+    ]);
+    return { items: items.map((i) => this.toDomain(i)), total };
   }
 
   async create(item: ItemEntity, context: PersistenceContext): Promise<void> {
