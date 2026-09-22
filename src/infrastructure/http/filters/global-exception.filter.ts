@@ -22,14 +22,22 @@ export interface ErrorResponseBody {
 }
 
 // Ponto unico de traducao erro -> HTTP. Erros de dominio viram 404/409/422,
-// HttpException (inclusive os 400 do ValidationPipe) passa como esta, e
-// qualquer outra coisa vira 500 generico: o detalhe fica so no log.
+// HttpException (400 do ValidationPipe, 429 do throttler, 503 do health)
+// passa como esta, e qualquer outra coisa vira 500 generico: o detalhe fica
+// so no log.
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   constructor(@Inject(LOGGER_TOKEN) private readonly logger: ILogger) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
+
+    if (exception instanceof HttpException) {
+      const { statusCode, body } = fromHttpException(exception);
+      response.status(statusCode).json(body);
+      return;
+    }
+
     const body = this.toBody(exception);
     response.status(body.statusCode).json(body);
   }
@@ -41,10 +49,6 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         error: exception.name,
         message: exception.message,
       };
-    }
-
-    if (exception instanceof HttpException) {
-      return fromHttpException(exception);
     }
 
     this.logger.error(
@@ -68,21 +72,21 @@ function statusForDomainError(error: DomainError): HttpStatus {
   return HttpStatus.BAD_REQUEST;
 }
 
-function fromHttpException(exception: HttpException): ErrorResponseBody {
+// Resposta de HttpException sai como foi construida (inclusive corpos sem
+// "message", como o 503 do terminus com status por dependencia).
+function fromHttpException(
+  exception: HttpException,
+): { statusCode: number; body: object } {
   const statusCode = exception.getStatus();
   const raw = exception.getResponse();
 
-  if (typeof raw === "object" && raw !== null && "message" in raw) {
-    const message = raw.message;
-    const error = "error" in raw && typeof raw.error === "string" ? raw.error : exception.name;
-    if (typeof message === "string" || isStringArray(message)) {
-      return { statusCode, error, message };
-    }
+  if (typeof raw === "object" && raw !== null) {
+    return { statusCode, body: raw };
   }
 
-  return { statusCode, error: exception.name, message: exception.message };
+  return {
+    statusCode,
+    body: { statusCode, error: exception.name, message: raw },
+  };
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((v) => typeof v === "string");
-}

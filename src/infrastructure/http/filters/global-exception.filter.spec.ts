@@ -1,4 +1,9 @@
-import { type ArgumentsHost, BadRequestException, HttpStatus } from "@nestjs/common";
+import {
+  type ArgumentsHost,
+  BadRequestException,
+  HttpStatus,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import type { ILogger } from "@common/logger/logger.interface";
 import { InvalidItemPriceError } from "@domain/entities/item.entity";
 import { ItemAlreadyExistsError, ItemNotFoundError } from "@domain/errors/item.errors";
@@ -7,7 +12,7 @@ import { type ErrorResponseBody, GlobalExceptionFilter } from "./global-exceptio
 
 interface Captured {
   status?: number;
-  body?: ErrorResponseBody;
+  body?: ErrorResponseBody | object;
 }
 
 function hostCapturing(captured: Captured): ArgumentsHost {
@@ -16,7 +21,7 @@ function hostCapturing(captured: Captured): ArgumentsHost {
       captured.status = code;
       return this;
     },
-    json(body: ErrorResponseBody) {
+    json(body: ErrorResponseBody | object) {
       captured.body = body;
       return this;
     },
@@ -72,8 +77,22 @@ describe("GlobalExceptionFilter", () => {
     const { status, body } = run(original, logger);
 
     expect(status).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-    expect(body?.message).toBe("Erro interno");
+    expect(body).toMatchObject({ message: "Erro interno" });
     expect(JSON.stringify(body)).not.toContain("ECONNREFUSED");
     expect(logger.error).toHaveBeenCalledWith(expect.any(String), original);
+  });
+
+  it("repassa corpo de HttpException sem message (503 do terminus)", () => {
+    const healthBody = {
+      status: "error",
+      info: {},
+      error: { kafka: { status: "down", message: "indisponivel" } },
+      details: { kafka: { status: "down", message: "indisponivel" } },
+    };
+
+    const { status, body } = run(new ServiceUnavailableException(healthBody));
+
+    expect(status).toBe(HttpStatus.SERVICE_UNAVAILABLE);
+    expect(body).toEqual(healthBody);
   });
 });

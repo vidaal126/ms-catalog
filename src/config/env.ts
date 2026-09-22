@@ -33,6 +33,7 @@ export const envSchema = z.object({
   IDEMPOTENCY_LOCK_TIMEOUT_MS: positiveInt.default(30_000),
   IDEMPOTENCY_CLEANUP_INTERVAL_MS: positiveInt.default(3_600_000),
 
+  HEALTH_CHECK_TIMEOUT_MS: positiveInt.default(1_500),
   SHUTDOWN_TIMEOUT_MS: positiveInt.default(10_000),
 });
 
