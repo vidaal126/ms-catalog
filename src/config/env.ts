@@ -28,6 +28,10 @@ export const envSchema = z.object({
   THROTTLE_DEFAULT_LIMIT: positiveInt.default(100),
   THROTTLE_CREATE_ITEM_TTL_MS: positiveInt.default(60_000),
   THROTTLE_CREATE_ITEM_LIMIT: positiveInt.default(20),
+
+  IDEMPOTENCY_TTL_HOURS: positiveInt.default(24),
+  IDEMPOTENCY_LOCK_TIMEOUT_MS: positiveInt.default(30_000),
+  IDEMPOTENCY_CLEANUP_INTERVAL_MS: positiveInt.default(3_600_000),
 });
 
 export type Env = z.infer<typeof envSchema>;

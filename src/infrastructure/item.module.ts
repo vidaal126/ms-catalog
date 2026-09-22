@@ -6,13 +6,14 @@ import { ListItemsUseCase } from "@application/use-cases/list-items.use-case";
 import { ITEM_REPOSITORY } from "@domain/repositories/item.repository";
 import { ItemRepositoryPrisma } from "@infrastructure/database/repositories/item.repository";
 import { ItemController } from "@infrastructure/http/item.controller";
+import { IdempotencyModule } from "@infrastructure/idempotency/idempotency.module";
 import { UuidIdGenerator } from "@infrastructure/identity/uuid-id-generator";
 import { MessagingModule } from "@infrastructure/messaging/messaging.module";
 import { OutboxPublisherService } from "@infrastructure/outbox/outbox-publisher.service";
 import { OutboxRepository } from "@infrastructure/outbox/outbox.repository";
 
 @Module({
-  imports: [MessagingModule],
+  imports: [MessagingModule, IdempotencyModule],
   controllers: [ItemController],
   providers: [
     { provide: ITEM_REPOSITORY, useClass: ItemRepositoryPrisma },

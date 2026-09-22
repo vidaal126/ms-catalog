@@ -11,6 +11,7 @@ describe("validateEnv", () => {
 
     expect(env.PORT).toBe(4000);
     expect(env.OUTBOX_POLL_INTERVAL_MS).toBe(2000);
+    expect(env.IDEMPOTENCY_TTL_HOURS).toBe(24);
     expect(env.KAFKA_BROKER).toEqual(["localhost:9092"]);
   });
 

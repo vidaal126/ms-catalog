@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Query,
+  UseInterceptors,
 } from "@nestjs/common";
 import { SkipThrottle } from "@nestjs/throttler";
 import { CreateItemUseCase } from "@application/use-cases/create-item.use-case";
@@ -21,6 +22,7 @@ import {
   toItemResponse,
   toPaginatedItemsResponse,
 } from "./mappers/item-response.mapper";
+import { IdempotencyInterceptor } from "./interceptors/idempotency.interceptor";
 
 // Throttler "createItem" (limite proprio, via env) vale so para o POST; o
 // "default" vale para todas as rotas.
@@ -35,6 +37,7 @@ export class ItemController {
 
   @Post()
   @SkipThrottle({ createItem: false })
+  @UseInterceptors(IdempotencyInterceptor)
   async create(
     @Body() dto: CreateItemDto,
     @CorrelationId() correlationId: string,
