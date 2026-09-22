@@ -4,12 +4,15 @@ import {
   type Item as ItemModel,
 } from "@infrastructure/database/generated";
 import { ItemEntity } from "@domain/entities/item.entity";
+import { ItemAlreadyExistsError } from "@domain/errors/item.errors";
 import {
   IItemRepository,
   PaginationParams,
   resolvePageSize,
 } from "@domain/repositories/item.repository";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
+
+const UNIQUE_CONSTRAINT_VIOLATION = "P2002";
 
 @Injectable()
 export class ItemRepositoryPrisma implements IItemRepository {
@@ -46,46 +49,60 @@ export class ItemRepositoryPrisma implements IItemRepository {
   }
 
   async create(item: ItemEntity): Promise<ItemEntity> {
-    const created = await this.prisma.$transaction(async (tx) => {
-      const savedItem = await tx.item.create({
-        data: {
-          sku: item.sku,
-          name: item.name,
-          description: item.description ?? null,
-          unitPrice: item.unitPrice,
-          weightKg: item.weightKg,
-          lengthCm: item.dimensions.lengthCm,
-          widthCm: item.dimensions.widthCm,
-          heightCm: item.dimensions.heightCm,
-        },
-      });
-
-      const payload: Prisma.InputJsonObject = {
-        schemaVersion: 1,
-        id: savedItem.id,
-        sku: savedItem.sku,
-        name: savedItem.name,
-        unitPrice: savedItem.unitPrice.toNumber(),
-        weightKg: savedItem.weightKg.toNumber(),
-        dimensions: {
-          lengthCm: savedItem.lengthCm.toNumber(),
-          widthCm: savedItem.widthCm.toNumber(),
-          heightCm: savedItem.heightCm.toNumber(),
-        },
-      };
-
-      await tx.outboxEvent.create({
-        data: {
-          aggregateId: savedItem.id,
-          eventType: "ItemCreated",
-          payload,
-        },
-      });
-
-      return savedItem;
-    });
-
+    const created = await this.transactionalCreate(item);
     return this.toDomain(created);
+  }
+
+  private async transactionalCreate(item: ItemEntity): Promise<ItemModel> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const savedItem = await tx.item.create({
+          data: {
+            sku: item.sku,
+            name: item.name,
+            description: item.description ?? null,
+            unitPrice: item.unitPrice,
+            weightKg: item.weightKg,
+            lengthCm: item.dimensions.lengthCm,
+            widthCm: item.dimensions.widthCm,
+            heightCm: item.dimensions.heightCm,
+          },
+        });
+
+        const payload: Prisma.InputJsonObject = {
+          schemaVersion: 1,
+          id: savedItem.id,
+          sku: savedItem.sku,
+          name: savedItem.name,
+          unitPrice: savedItem.unitPrice.toNumber(),
+          weightKg: savedItem.weightKg.toNumber(),
+          dimensions: {
+            lengthCm: savedItem.lengthCm.toNumber(),
+            widthCm: savedItem.widthCm.toNumber(),
+            heightCm: savedItem.heightCm.toNumber(),
+          },
+        };
+
+        await tx.outboxEvent.create({
+          data: {
+            aggregateId: savedItem.id,
+            eventType: "ItemCreated",
+            payload,
+          },
+        });
+
+        return savedItem;
+      });
+    } catch (err) {
+      // A unica constraint unica alcancavel aqui e items.sku.
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === UNIQUE_CONSTRAINT_VIOLATION
+      ) {
+        throw new ItemAlreadyExistsError(item.sku);
+      }
+      throw err;
+    }
   }
 
   private toDomain(raw: ItemModel): ItemEntity {

@@ -1,4 +1,4 @@
-import { ConflictException, Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { ItemEntity } from "../../domain/entities/item.entity";
 import {
   IItemRepository,
@@ -26,12 +26,10 @@ export class CreateItemUseCase {
     @Inject(ITEM_REPOSITORY) private readonly itemRepository: IItemRepository,
   ) {}
 
+  // SKU duplicado nao e pre-checado aqui: a constraint unica do banco e a
+  // unica fonte de verdade (sem janela de corrida) e o repositorio traduz a
+  // violacao para ItemAlreadyExistsError.
   async execute(input: CreateItemInput): Promise<ItemEntity> {
-    const existing = await this.itemRepository.findBySku(input.sku);
-    if (existing) {
-      throw new ConflictException(`Item com SKU ${input.sku} já existe`);
-    }
-
     const item = ItemEntity.create({
       sku: input.sku,
       name: input.name,

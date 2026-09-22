@@ -4,13 +4,13 @@ import {
   Controller,
   Get,
   Inject,
-  NotFoundException,
   Param,
   Post,
   Query,
 } from "@nestjs/common";
 import { CreateItemUseCase } from "../../application/use-cases/create-item.use-case";
 import { ItemEntity } from "../../domain/entities/item.entity";
+import { ItemNotFoundError } from "../../domain/errors/item.errors";
 import {
   IItemRepository,
   ITEM_REPOSITORY,
@@ -44,7 +44,7 @@ export class ItemController {
   async findById(@Param("id") id: string): Promise<ItemEntity> {
     const item = await this.itemRepository.findById(id);
     if (!item) {
-      throw new NotFoundException(`Item com id ${id} não encontrado`);
+      throw new ItemNotFoundError(id);
     }
     return item;
   }

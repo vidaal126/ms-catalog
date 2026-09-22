@@ -1,21 +1,16 @@
+import { InvariantViolationError } from "@domain/errors/domain.error";
 import {
   Dimensions,
   DimensionsProps,
 } from "@domain/value-objects/dimensions.value-object";
 
-export class InvalidItemPriceError extends Error {
+export class InvalidItemPriceError extends InvariantViolationError {
   constructor() {
     super("unitPrice deve ser maior que zero");
-    this.name = "InvalidItemPriceError";
   }
 }
 
-export class InvalidItemWeightError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "InvalidItemWeightError";
-  }
-}
+export class InvalidItemWeightError extends InvariantViolationError {}
 
 interface ItemBaseProps {
   readonly sku: string;
