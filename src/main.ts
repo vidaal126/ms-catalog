@@ -1,10 +1,12 @@
-import { Logger } from "nestjs-pino";
-import { ValidationPipe } from "@nestjs/common";
-import { NestFactory } from "@nestjs/core";
+import { ValidationPipe, type INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { NestFactory } from "@nestjs/core";
 import helmet from "helmet";
+import { Logger } from "nestjs-pino";
 import type { Env } from "@config/env";
 import { AppModule } from "./app.module";
+
+const SHUTDOWN_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
 async function bootstrap(): Promise<void> {
   // abortOnError: false - erro de inicializacao (ex.: env invalida) sobe para
@@ -26,10 +28,51 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  app.enableShutdownHooks();
-
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+  registerGracefulShutdown(app, config.get("SHUTDOWN_TIMEOUT_MS", { infer: true }));
+
   await app.listen(config.get("PORT", { infer: true }));
+}
+
+// Substitui app.enableShutdownHooks() para impor um teto de tempo: app.close()
+// dispara onModuleDestroy (para outbox/limpeza e aguarda o ciclo em
+// andamento), fecha o servidor HTTP e so entao onApplicationShutdown
+// (desconecta Kafka e Prisma). Estourado o teto, o processo sai com erro.
+function registerGracefulShutdown(app: INestApplication, timeoutMs: number): void {
+  const logger = app.get(Logger);
+  let shuttingDown = false;
+
+  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.log(`${signal} recebido, encerrando (timeout ${timeoutMs}ms)`);
+
+    const forceExit = setTimeout((): void => {
+      logger.error(`Shutdown excedeu ${timeoutMs}ms, encerrando a forca`);
+      process.exit(1);
+    }, timeoutMs);
+    forceExit.unref();
+
+    let exitCode = 0;
+    try {
+      await app.close();
+      logger.log("Shutdown concluido");
+    } catch (err) {
+      logger.error("Falha no shutdown", err instanceof Error ? err.stack : String(err));
+      exitCode = 1;
+    } finally {
+      clearTimeout(forceExit);
+    }
+    // Saida explicita: um handle esquecido (socket, timer) nao pode deixar o
+    // processo vivo depois do shutdown.
+    process.exit(exitCode);
+  };
+
+  for (const signal of SHUTDOWN_SIGNALS) {
+    process.once(signal, (): void => {
+      void shutdown(signal);
+    });
+  }
 }
 
 bootstrap().catch((err: unknown): void => {

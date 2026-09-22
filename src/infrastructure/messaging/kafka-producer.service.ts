@@ -1,7 +1,7 @@
 import {
   Inject,
   Injectable,
-  type OnModuleDestroy,
+  type OnApplicationShutdown,
   type OnModuleInit,
 } from "@nestjs/common";
 import { type Kafka, Partitioners, type Producer } from "kafkajs";
@@ -10,7 +10,9 @@ import type { OutboundMessage } from "./event-envelope";
 import { KAFKA_CLIENT } from "./kafka.tokens";
 
 @Injectable()
-export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
+export class KafkaProducerService
+  implements OnModuleInit, OnApplicationShutdown
+{
   private readonly producer: Producer;
   private isConnected = false;
   private connecting: Promise<void> | null = null;
@@ -47,7 +49,9 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     void this.connect().catch((): void => undefined);
   }
 
-  async onModuleDestroy(): Promise<void> {
+  // onApplicationShutdown roda depois de todos os onModuleDestroy: o outbox
+  // publisher ja parou e terminou o ciclo em andamento quando chegamos aqui.
+  async onApplicationShutdown(): Promise<void> {
     await this.producer.disconnect();
   }
 

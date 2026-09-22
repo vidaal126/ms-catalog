@@ -25,12 +25,17 @@ import { OutboxRepository } from "./outbox.repository";
 // duplicação por retry de rede, mas não contra o processo caindo de
 // verdade no meio - por isso consumidores desse evento PRECISAM ser
 // idempotentes (o eventId do envelope é estável entre reenvios).
+//
+// Shutdown: onModuleDestroy para o polling, interrompe o lote entre um
+// evento e outro e aguarda o ciclo em andamento marcar o que já foi enviado.
+// Producer e Prisma só desconectam depois, em onApplicationShutdown.
 @Injectable()
 export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   private readonly pollIntervalMs: number;
   private readonly batchSize: number;
   private intervalHandle: NodeJS.Timeout | null = null;
-  private isPolling = false;
+  private currentCycle: Promise<void> | null = null;
+  private stopping = false;
 
   constructor(
     private readonly outbox: OutboxRepository,
@@ -43,25 +48,33 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
-    this.intervalHandle = setInterval(() => {
-      void this.pollAndPublish();
+    this.intervalHandle = setInterval((): void => {
+      if (this.currentCycle || this.stopping) return;
+      // pollAndPublish nunca rejeita (erros sao logados dentro dele).
+      this.currentCycle = this.pollAndPublish().finally((): void => {
+        this.currentCycle = null;
+      });
     }, this.pollIntervalMs);
   }
 
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
+    this.stopping = true;
     if (this.intervalHandle) clearInterval(this.intervalHandle);
+    if (this.currentCycle) {
+      this.logger.log("Aguardando ciclo do outbox em andamento para encerrar");
+      await this.currentCycle;
+    }
   }
 
   private async pollAndPublish(): Promise<void> {
-    if (this.isPolling) return;
-    this.isPolling = true;
-
     try {
       const pending = await this.outbox.findPending(this.batchSize);
 
       const publishedIds: string[] = [];
 
       for (const event of pending) {
+        if (this.stopping) break;
+
         try {
           await this.kafkaProducer.send(toOutboundMessage(event));
 
@@ -74,23 +87,22 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
         } catch (err) {
           this.logger.error(
             `Falha ao publicar evento ${event.id}`,
-            err as Error,
+            toError(err),
           );
         }
       }
 
       if (publishedIds.length > 0) {
-        try {
-          await this.outbox.markPublished(publishedIds, new Date());
-        } catch (err) {
-          this.logger.error(
-            `Falha ao marcar ${publishedIds.length} evento(s) como publicado(s)`,
-            err as Error,
-          );
-        }
+        await this.outbox.markPublished(publishedIds, new Date());
       }
-    } finally {
-      this.isPolling = false;
+    } catch (err) {
+      // Banco indisponivel etc.: o proximo tick tenta de novo. Eventos ja
+      // enviados e nao marcados serao reenviados (at-least-once).
+      this.logger.error("Falha no ciclo do outbox", toError(err));
     }
   }
+}
+
+function toError(err: unknown): Error {
+  return err instanceof Error ? err : new Error(String(err));
 }

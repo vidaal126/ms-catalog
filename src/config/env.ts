@@ -32,6 +32,8 @@ export const envSchema = z.object({
   IDEMPOTENCY_TTL_HOURS: positiveInt.default(24),
   IDEMPOTENCY_LOCK_TIMEOUT_MS: positiveInt.default(30_000),
   IDEMPOTENCY_CLEANUP_INTERVAL_MS: positiveInt.default(3_600_000),
+
+  SHUTDOWN_TIMEOUT_MS: positiveInt.default(10_000),
 });
 
 export type Env = z.infer<typeof envSchema>;
