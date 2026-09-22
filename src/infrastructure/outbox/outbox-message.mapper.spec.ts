@@ -54,7 +54,8 @@ describe("ItemCreated no outbox -> mensagem Kafka", () => {
       schemaVersion: "2",
       correlationId: "corr-1",
     });
-    expect(JSON.parse(message.value)).toEqual({
+    expect(typeof message.value).toBe("string");
+    expect(JSON.parse(String(message.value))).toEqual({
       eventId: row.id,
       eventType: "ItemCreated",
       schemaVersion: 2,

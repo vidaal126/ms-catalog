@@ -56,7 +56,7 @@ describe("OutboxPublisherService shutdown", () => {
             releaseFirstSend = resolve;
           });
         }
-        sent.push(message.key);
+        sent.push(String(message.key));
       },
     };
     const values: Partial<Env> = { OUTBOX_POLL_INTERVAL_MS: 10, OUTBOX_BATCH_SIZE: 20 };
