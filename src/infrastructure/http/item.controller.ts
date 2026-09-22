@@ -7,6 +7,7 @@ import {
   Post,
   Query,
 } from "@nestjs/common";
+import { SkipThrottle } from "@nestjs/throttler";
 import { CreateItemUseCase } from "@application/use-cases/create-item.use-case";
 import { GetItemUseCase } from "@application/use-cases/get-item.use-case";
 import { ListItemsUseCase } from "@application/use-cases/list-items.use-case";
@@ -21,7 +22,10 @@ import {
   toPaginatedItemsResponse,
 } from "./mappers/item-response.mapper";
 
+// Throttler "createItem" (limite proprio, via env) vale so para o POST; o
+// "default" vale para todas as rotas.
 @Controller("items")
+@SkipThrottle({ createItem: true })
 export class ItemController {
   constructor(
     private readonly createItemUseCase: CreateItemUseCase,
@@ -30,6 +34,7 @@ export class ItemController {
   ) {}
 
   @Post()
+  @SkipThrottle({ createItem: false })
   async create(
     @Body() dto: CreateItemDto,
     @CorrelationId() correlationId: string,

@@ -2,6 +2,7 @@ import { Logger } from "nestjs-pino";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
+import helmet from "helmet";
 import type { Env } from "@config/env";
 import { AppModule } from "./app.module";
 
@@ -14,6 +15,7 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useLogger(app.get(Logger));
+  app.use(helmet());
 
   app.useGlobalPipes(
     new ValidationPipe({
