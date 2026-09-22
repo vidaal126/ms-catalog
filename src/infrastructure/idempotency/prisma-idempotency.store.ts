@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import type { JsonValue } from "@common/json";
-import type { Env } from "@config/env";
+import { type Env, readEnv } from "@config/env";
 import { Prisma } from "@infrastructure/database/generated";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
 import {
@@ -24,10 +24,8 @@ export class PrismaIdempotencyStore implements IdempotencyStore {
     private readonly prisma: PrismaService,
     config: ConfigService<Env, true>,
   ) {
-    this.ttlMs = config.get("IDEMPOTENCY_TTL_HOURS", { infer: true }) * HOUR_MS;
-    this.lockTimeoutMs = config.get("IDEMPOTENCY_LOCK_TIMEOUT_MS", {
-      infer: true,
-    });
+    this.ttlMs = readEnv(config, "IDEMPOTENCY_TTL_HOURS") * HOUR_MS;
+    this.lockTimeoutMs = readEnv(config, "IDEMPOTENCY_LOCK_TIMEOUT_MS");
   }
 
   async claim(key: string, requestHash: string, now: Date): Promise<ClaimResult> {

@@ -7,7 +7,7 @@ import {
 } from "@nestjs/terminus";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
 import { withTimeout } from "@common/with-timeout";
-import type { Env } from "@config/env";
+import { type Env, readEnv } from "@config/env";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
 
 // O PrismaHealthIndicator do terminus 10 chama $runCommandRaw (so existe no
@@ -23,7 +23,7 @@ export class PrismaHealthIndicator extends HealthIndicator {
     config: ConfigService<Env, true>,
   ) {
     super();
-    this.timeoutMs = config.get("HEALTH_CHECK_TIMEOUT_MS", { infer: true });
+    this.timeoutMs = readEnv(config, "HEALTH_CHECK_TIMEOUT_MS");
   }
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {

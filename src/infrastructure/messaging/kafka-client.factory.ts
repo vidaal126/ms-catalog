@@ -27,9 +27,13 @@ export class KafkaClientFactory {
   }
 
   create(): Kafka {
+    // Leituras sem anotacao de tipo: dentro do objeto de config do KafkaJS o
+    // ConfigService.get inferiria o retorno pelo contexto, sem checagem.
+    const clientId = this.config.get("KAFKA_CLIENT_ID", { infer: true });
+    const brokers = this.config.get("KAFKA_BROKER", { infer: true });
     return new Kafka({
-      clientId: this.config.get("KAFKA_CLIENT_ID", { infer: true }),
-      brokers: this.config.get("KAFKA_BROKER", { infer: true }),
+      clientId,
+      brokers,
       // Timeout explícito por tentativa: sem ele o socket fica pendurado
       // esperando a rede responder eventualmente.
       connectionTimeout: CONNECTION_TIMEOUT_MS,

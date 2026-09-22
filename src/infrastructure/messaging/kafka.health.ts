@@ -35,7 +35,10 @@ export class KafkaHealthIndicator
     config: ConfigService<HealthEnv, true>,
   ) {
     super();
-    this.timeoutMs = config.get("HEALTH_CHECK_TIMEOUT_MS", { infer: true });
+    // Sem anotacao: atribuir direto ao campo tipado deixaria o get inferir o
+    // retorno pelo contexto, sem checagem.
+    const timeoutMs = config.get("HEALTH_CHECK_TIMEOUT_MS", { infer: true });
+    this.timeoutMs = timeoutMs;
   }
 
   async isHealthy(key: string): Promise<HealthIndicatorResult> {

@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import helmet from "helmet";
 import { Logger } from "nestjs-pino";
-import type { Env } from "@config/env";
+import { type Env, readEnv } from "@config/env";
 import { AppModule } from "./app.module";
 
 const SHUTDOWN_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
@@ -29,9 +29,9 @@ async function bootstrap(): Promise<void> {
   );
 
   const config = app.get<ConfigService<Env, true>>(ConfigService);
-  registerGracefulShutdown(app, config.get("SHUTDOWN_TIMEOUT_MS", { infer: true }));
+  registerGracefulShutdown(app, readEnv(config, "SHUTDOWN_TIMEOUT_MS"));
 
-  await app.listen(config.get("PORT", { infer: true }));
+  await app.listen(readEnv(config, "PORT"));
 }
 
 // Substitui app.enableShutdownHooks() para impor um teto de tempo: app.close()

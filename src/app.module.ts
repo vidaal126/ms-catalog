@@ -3,7 +3,7 @@ import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "@common/logger/logger.module";
-import { type Env, validateEnv } from "@config/env";
+import { type Env, readEnv, validateEnv } from "@config/env";
 import { PrismaModule } from "@infrastructure/database/prisma/prisma.module";
 import { HealthModule } from "@infrastructure/health/health.module";
 import { GlobalExceptionFilter } from "@infrastructure/http/filters/global-exception.filter";
@@ -19,13 +19,13 @@ import { ItemModule } from "@infrastructure/item.module";
         throttlers: [
           {
             name: "default",
-            ttl: config.get("THROTTLE_DEFAULT_TTL_MS", { infer: true }),
-            limit: config.get("THROTTLE_DEFAULT_LIMIT", { infer: true }),
+            ttl: readEnv(config, "THROTTLE_DEFAULT_TTL_MS"),
+            limit: readEnv(config, "THROTTLE_DEFAULT_LIMIT"),
           },
           {
             name: "createItem",
-            ttl: config.get("THROTTLE_CREATE_ITEM_TTL_MS", { infer: true }),
-            limit: config.get("THROTTLE_CREATE_ITEM_LIMIT", { infer: true }),
+            ttl: readEnv(config, "THROTTLE_CREATE_ITEM_TTL_MS"),
+            limit: readEnv(config, "THROTTLE_CREATE_ITEM_LIMIT"),
           },
         ],
       }),

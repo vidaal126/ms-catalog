@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
-import type { Env } from "@config/env";
+import { type Env, readEnv } from "@config/env";
 import { KafkaProducerService } from "@infrastructure/messaging/kafka-producer.service";
 import { toOutboundMessage } from "./outbox-message.mapper";
 import { OutboxRepository } from "./outbox.repository";
@@ -43,8 +43,8 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
     config: ConfigService<Env, true>,
   ) {
-    this.pollIntervalMs = config.get("OUTBOX_POLL_INTERVAL_MS", { infer: true });
-    this.batchSize = config.get("OUTBOX_BATCH_SIZE", { infer: true });
+    this.pollIntervalMs = readEnv(config, "OUTBOX_POLL_INTERVAL_MS");
+    this.batchSize = readEnv(config, "OUTBOX_BATCH_SIZE");
   }
 
   onModuleInit(): void {

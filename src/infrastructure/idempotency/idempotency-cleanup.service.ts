@@ -6,7 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
-import type { Env } from "@config/env";
+import { type Env, readEnv } from "@config/env";
 import { IDEMPOTENCY_STORE, type IdempotencyStore } from "./idempotency.store";
 
 // Remove chaves expiradas periodicamente. Rodar em varias replicas e seguro:
@@ -22,9 +22,7 @@ export class IdempotencyCleanupService implements OnModuleInit, OnModuleDestroy 
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
     config: ConfigService<Env, true>,
   ) {
-    this.intervalMs = config.get("IDEMPOTENCY_CLEANUP_INTERVAL_MS", {
-      infer: true,
-    });
+    this.intervalMs = readEnv(config, "IDEMPOTENCY_CLEANUP_INTERVAL_MS");
   }
 
   onModuleInit(): void {

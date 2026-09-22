@@ -6,7 +6,7 @@ import {
   CORRELATION_ID_HEADER,
   resolveCorrelationId,
 } from "@common/correlation/correlation-id";
-import type { Env } from "@config/env";
+import { type Env, readEnv } from "@config/env";
 import { LOGGER_TOKEN } from "./logger.interface";
 import { PinoLoggerService } from "./pino-logger.service";
 
@@ -21,9 +21,9 @@ type ExpressLike = IncomingMessage & { route?: { path?: string } };
       useFactory: (config: ConfigService<Env, true>) => ({
         forRoutes: [{ path: "*", method: RequestMethod.ALL }],
         pinoHttp: {
-          level: config.get("LOG_LEVEL", { infer: true }),
+          level: readEnv(config, "LOG_LEVEL"),
           transport:
-            config.get("NODE_ENV", { infer: true }) !== "production"
+            readEnv(config, "NODE_ENV") !== "production"
               ? { target: "pino-pretty", options: { singleLine: true } }
               : undefined,
           // O id da requisicao e o correlationId: vem do header (se valido)

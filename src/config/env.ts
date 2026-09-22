@@ -1,3 +1,4 @@
+import type { ConfigService } from "@nestjs/config";
 import { z } from "zod";
 
 const positiveInt = z.coerce.number().int().positive();
@@ -51,4 +52,14 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     );
   }
   return result.data;
+}
+
+// ConfigService.get(key, { infer: true }) infere o retorno pelo contexto
+// (overload generico): atribuir a um campo de outro tipo compila sem erro.
+// readEnv fixa o retorno em Env[K], o tipo validado pelo schema.
+export function readEnv<K extends keyof Env>(
+  config: ConfigService<Env, true>,
+  key: K,
+): Env[K] {
+  return config.get(key, { infer: true });
 }
