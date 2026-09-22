@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
+import type { Env } from "@config/env";
 import { PrismaService } from "@infrastructure/database/prisma/prisma.service";
 import { toOutboundMessage } from "./event-envelope";
 import { KafkaProducerService } from "./kafka-producer.service";
@@ -36,10 +37,10 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly kafkaProducer: KafkaProducerService,
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
-    config: ConfigService,
+    config: ConfigService<Env, true>,
   ) {
-    this.pollIntervalMs = config.get<number>("OUTBOX_POLL_INTERVAL_MS", 2000);
-    this.batchSize = config.get<number>("OUTBOX_BATCH_SIZE", 20);
+    this.pollIntervalMs = config.get("OUTBOX_POLL_INTERVAL_MS", { infer: true });
+    this.batchSize = config.get("OUTBOX_BATCH_SIZE", { infer: true });
   }
 
   onModuleInit(): void {

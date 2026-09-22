@@ -7,6 +7,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { Kafka, Partitioners, type Producer } from "kafkajs";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
+import type { Env } from "@config/env";
 import type { OutboundMessage } from "./event-envelope";
 
 const CONNECTION_TIMEOUT_MS = 3_000;
@@ -20,12 +21,12 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   private connecting: Promise<void> | null = null;
 
   constructor(
-    config: ConfigService,
+    config: ConfigService<Env, true>,
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
   ) {
     this.kafka = new Kafka({
       clientId: "ms-catalog",
-      brokers: [config.get<string>("KAFKA_BROKER", "localhost:9092")],
+      brokers: config.get("KAFKA_BROKER", { infer: true }),
       // Timeout explícito por tentativa: sem ele o socket fica pendurado
       // esperando a rede responder eventualmente.
       connectionTimeout: CONNECTION_TIMEOUT_MS,

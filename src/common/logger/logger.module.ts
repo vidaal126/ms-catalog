@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Global, Module, RequestMethod } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { LoggerModule as PinoLoggerModule } from "nestjs-pino";
+import type { Env } from "@config/env";
 import { LOGGER_TOKEN } from "./logger.interface";
 import { PinoLoggerService } from "./pino-logger.service";
 
@@ -13,12 +14,12 @@ type ExpressLike = IncomingMessage & { route?: { path?: string } };
     PinoLoggerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
+      useFactory: (config: ConfigService<Env, true>) => ({
         forRoutes: [{ path: "*", method: RequestMethod.ALL }],
         pinoHttp: {
-          level: config.get<string>("LOG_LEVEL", "info"),
+          level: config.get("LOG_LEVEL", { infer: true }),
           transport:
-            config.get<string>("NODE_ENV") !== "production"
+            config.get("NODE_ENV", { infer: true }) !== "production"
               ? { target: "pino-pretty", options: { singleLine: true } }
               : undefined,
           customAttributeKeys: { responseTime: "duration" },
