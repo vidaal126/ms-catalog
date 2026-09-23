@@ -1,10 +1,10 @@
-import { ValidationPipe, type INestApplication } from "@nestjs/common";
+import type { INestApplication } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
-import helmet from "helmet";
 import { Logger } from "nestjs-pino";
 import { type Env, readEnv } from "@config/env";
 import { AppModule } from "./app.module";
+import { configureApp } from "./app.setup";
 
 const SHUTDOWN_SIGNALS: readonly NodeJS.Signals[] = ["SIGTERM", "SIGINT"];
 
@@ -17,16 +17,7 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useLogger(app.get(Logger));
-  app.use(helmet());
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transformOptions: { enableImplicitConversion: false },
-    }),
-  );
+  configureApp(app);
 
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   registerGracefulShutdown(app, readEnv(config, "SHUTDOWN_TIMEOUT_MS"));
