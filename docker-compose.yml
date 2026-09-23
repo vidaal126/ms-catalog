@@ -1,24 +1,62 @@
+# Ambiente completo: ms-catalog, ms-transport e a infraestrutura dos dois.
+#
+#   docker compose up -d --build        sobe tudo (apps em container)
+#   docker compose up -d catalog-db transport-db kafka kafka-init rabbitmq kafka-ui
+#                                       so a infraestrutura, para rodar os apps no host
+#
+# O ms-transport e buildado a partir do repositorio irmao (../ms-transport,
+# configuravel por TRANSPORT_CONTEXT). Nao suba junto com o docker-compose do
+# proprio ms-transport: as portas do Postgres e do RabbitMQ sao as mesmas.
+#
+# Kafka tem dois listeners: INTERNAL (kafka:29092) para quem esta na rede do
+# compose e EXTERNAL (localhost:9092) para os apps rodando no host. Por isso os
+# containers recebem KAFKA_BROKER=kafka:29092 e o .env do host usa
+# localhost:9092.
+
 services:
   catalog-db:
     image: postgres:16-alpine
     container_name: catalog-db
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: catalog
-      POSTGRES_PASSWORD: catalog
-      POSTGRES_DB: catalog_db
+      POSTGRES_USER: ${CATALOG_DB_USER:-catalog}
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:-catalog}
+      POSTGRES_DB: ${CATALOG_DB_NAME:-catalog_db}
     ports:
       - "5433:5432"
     volumes:
       - catalog_db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U catalog -d catalog_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER:-catalog} -d ${CATALOG_DB_NAME:-catalog_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - platform
+
+  transport-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${TRANSPORT_DB_USER:-transport}
+      POSTGRES_PASSWORD: ${TRANSPORT_DB_PASSWORD:-transport}
+      POSTGRES_DB: ${TRANSPORT_DB_NAME:-transport_db}
+    ports:
+      - "5435:5432"
+    volumes:
+      - transport_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TRANSPORT_DB_USER:-transport} -d ${TRANSPORT_DB_NAME:-transport_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
     container_name: catalog-kafka
+    restart: unless-stopped
     ports:
       - "9092:9092"
     environment:
@@ -36,26 +74,152 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "kafka-broker-api-versions --bootstrap-server localhost:29092",
-        ]
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092"]
       interval: 10s
       timeout: 10s
       retries: 10
+    networks:
+      - platform
+
+  # Cria os topicos com retencao infinita (a padrao, 7 dias, apaga a massa de
+  # teste e mensagens da DLT). Idempotente.
+  kafka-init:
+    image: confluentinc/cp-kafka:7.6.1
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        for topic in catalog.ItemCreated catalog.ItemCreated.DLT; do
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$topic" --partitions 1 --replication-factor 1 \
+            --config retention.ms=-1
+        done
+    networks:
+      - platform
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: catalog-kafka-ui
+    restart: unless-stopped
     ports:
       - "8090:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
+    networks:
+      - platform
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      # Ambiente local: libera o usuario guest fora do localhost do container,
+      # para o ms-transport conectar tanto em container quanto no host.
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit loopback_users []"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - platform
+
+  catalog-migrate:
+    build:
+      context: .
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${CATALOG_DB_USER:-catalog}:${CATALOG_DB_PASSWORD:-catalog}@catalog-db:5432/${CATALOG_DB_NAME:-catalog_db}?schema=public
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    networks:
+      - platform
+
+  ms-catalog:
+    build:
+      context: .
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${CATALOG_DB_USER:-catalog}:${CATALOG_DB_PASSWORD:-catalog}@catalog-db:5432/${CATALOG_DB_NAME:-catalog_db}?schema=public
+      KAFKA_BROKER: kafka:29092
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${CATALOG_PORT:-3000}:8080"
+    depends_on:
+      catalog-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
+  transport-migrate:
+    build:
+      context: ${TRANSPORT_CONTEXT:-../ms-transport}
+      target: migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${TRANSPORT_DB_USER:-transport}:${TRANSPORT_DB_PASSWORD:-transport}@transport-db:5432/${TRANSPORT_DB_NAME:-transport_db}?schema=public
+    depends_on:
+      transport-db:
+        condition: service_healthy
+    networks:
+      - platform
+
+  ms-transport:
+    build:
+      context: ${TRANSPORT_CONTEXT:-../ms-transport}
+      target: production
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${TRANSPORT_DB_USER:-transport}:${TRANSPORT_DB_PASSWORD:-transport}@transport-db:5432/${TRANSPORT_DB_NAME:-transport_db}?schema=public
+      KAFKA_BROKER: kafka:29092
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${TRANSPORT_PORT:-3001}:8080"
+    depends_on:
+      transport-migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
 
 volumes:
   catalog_db_data:
+  transport_db_data:
   kafka_data:
+  rabbitmq_data:
+
+networks:
+  platform:
+    driver: bridge
