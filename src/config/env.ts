@@ -21,6 +21,9 @@ export const envSchema = z.object({
     .transform((value) => value.split(",").map((broker) => broker.trim()))
     .pipe(z.array(z.string().regex(/^[^\s:]+:\d+$/, "formato host:porta")).min(1)),
   KAFKA_CLIENT_ID: z.string().min(1).default("ms-catalog"),
+  // Teto de cada envio do producer (connect + send). Abaixo do
+  // SHUTDOWN_TIMEOUT_MS para o ciclo do outbox nao segurar o shutdown.
+  KAFKA_SEND_TIMEOUT_MS: positiveInt.default(5_000),
 
   OUTBOX_POLL_INTERVAL_MS: positiveInt.default(2000),
   OUTBOX_BATCH_SIZE: positiveInt.max(1000).default(20),

@@ -74,6 +74,7 @@ todas as variáveis com problema.
 | `PORT` | `3000` | porta HTTP (8080 na imagem Docker) |
 | `LOG_LEVEL` | `info` | nível do Pino |
 | `KAFKA_CLIENT_ID` | `ms-catalog` | client id do KafkaJS |
+| `KAFKA_SEND_TIMEOUT_MS` | `5000` | teto de cada envio ao Kafka (conta como falha no outbox) |
 | `OUTBOX_POLL_INTERVAL_MS` | `2000` | intervalo do polling do outbox |
 | `OUTBOX_BATCH_SIZE` | `20` | eventos por ciclo |
 | `THROTTLE_DEFAULT_TTL_MS` / `THROTTLE_DEFAULT_LIMIT` | `60000` / `100` | rate limit de todas as rotas |
@@ -185,7 +186,8 @@ leva cerca de 10 minutos por causa do build.
   configurar `trust proxy`.
 - **Readiness depende do Kafka**: com o broker fora a API ainda aceitaria
   criações (o outbox acumula), mas o readiness fica 503.
-- **SIGTERM com o broker fora**: o ciclo do outbox em andamento fica preso no
-  `connect` do producer (retries ilimitados), então o shutdown só termina pelo
-  `SHUTDOWN_TIMEOUT_MS` (exit 1). Nenhum evento se perde: as linhas continuam
-  pendentes no outbox e são publicadas no próximo start.
+- **Envio com timeout**: o producer tem retries ilimitados (exigência do modo
+  idempotente), então cada envio é limitado por `KAFKA_SEND_TIMEOUT_MS`. Um
+  envio que estoura o teto conta como falha: o evento fica pendente e é
+  reenviado no próximo tick. Se o envio original ainda completar depois do
+  timeout, o consumer recebe duplicata (deduplicada pelo `eventId`).
