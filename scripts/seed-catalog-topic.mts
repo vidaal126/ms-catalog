@@ -60,7 +60,7 @@ const messages: ReadonlyArray<{ key: string; value: string }> = [
   },
   {
     key: "invalid-message",
-    value: "{isto nao e json",
+    value: "t",
   },
   {
     key: BOX_001_ID,

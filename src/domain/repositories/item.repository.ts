@@ -19,8 +19,6 @@ export interface PersistenceContext {
 
 export interface IItemRepository {
   findById(id: string): Promise<ItemEntity | undefined>;
-  findBySku(sku: string): Promise<ItemEntity | undefined>;
-  findByIds(ids: string[]): Promise<ItemEntity[]>;
   findAll(request: PageRequest): Promise<Page<ItemEntity>>;
   // Persiste o agregado e converte seus eventos de dominio em registros de
   // outbox na mesma transacao. Lanca ItemAlreadyExistsError em SKU duplicado.

@@ -97,6 +97,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
             ),
         );
       case "completed":
+        // Replay fiel: o status gravado vence o default da rota.
+        response.status(claim.responseStatus);
         response.setHeader(IDEMPOTENT_REPLAYED_HEADER, "true");
         return of(claim.responseBody);
       case "claimed":

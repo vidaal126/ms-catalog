@@ -44,7 +44,11 @@ describe("ms-catalog: criacao de item e publicacao via outbox (integracao)", () 
   beforeAll(async () => {
     [postgres, kafkaContainer] = await Promise.all([
       new PostgreSqlContainer("postgres:16-alpine").start(),
-      new KafkaContainer("confluentinc/cp-kafka:7.6.1").withKraft().start(),
+      // Igual ao compose: topico so existe se for criado explicitamente.
+      new KafkaContainer("confluentinc/cp-kafka:7.6.1")
+        .withKraft()
+        .withEnvironment({ KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false" })
+        .start(),
     ]);
     const broker = `${kafkaContainer.getHost()}:${kafkaContainer.getMappedPort(9093)}`;
     kafka = new KafkaTestClient(broker);
@@ -93,6 +97,15 @@ describe("ms-catalog: criacao de item e publicacao via outbox (integracao)", () 
 
     expect(duplicate.status).toBe(409);
     expect(duplicate.body).toMatchObject({ error: "ItemAlreadyExistsError" });
+  });
+
+  it("unitPrice acima do limite do DECIMAL(10,2) retorna 400, nao 500 nem 422", async () => {
+    const response = await postJson(`${running.baseUrl}/items`, {
+      ...itemBody("INT-PRICE-MAX"),
+      unitPrice: 100_000_000,
+    });
+
+    expect(response.status).toBe(400);
   });
 
   it("mesma Idempotency-Key e mesmo corpo devolvem a resposta original sem criar outro item", async () => {

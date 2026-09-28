@@ -26,19 +26,6 @@ export class ItemRepositoryPrisma implements IItemRepository {
     return this.toDomain(item);
   }
 
-  async findBySku(sku: string): Promise<ItemEntity | undefined> {
-    const item = await this.prisma.item.findUnique({ where: { sku } });
-    if (!item) return undefined;
-    return this.toDomain(item);
-  }
-
-  async findByIds(ids: string[]): Promise<ItemEntity[]> {
-    const items = await this.prisma.item.findMany({
-      where: { id: { in: ids } },
-    });
-    return items.map((i) => this.toDomain(i));
-  }
-
   async findAll(request: PageRequest): Promise<Page<ItemEntity>> {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.item.findMany({

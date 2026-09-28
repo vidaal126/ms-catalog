@@ -44,14 +44,6 @@ export class InMemoryItemRepository implements IItemRepository {
     return this.items.find((i) => i.id === id);
   }
 
-  async findBySku(sku: string): Promise<ItemEntity | undefined> {
-    return this.items.find((i) => i.sku === sku);
-  }
-
-  async findByIds(ids: string[]): Promise<ItemEntity[]> {
-    return this.items.filter((i) => ids.includes(i.id));
-  }
-
   async findAll(request: PageRequest): Promise<Page<ItemEntity>> {
     const start = (request.page - 1) * request.pageSize;
     return {

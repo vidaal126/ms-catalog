@@ -50,10 +50,12 @@ class FakeStore implements IdempotencyStore {
 interface FakeHttp {
   context: ExecutionContext;
   responseHeaders: Record<string, string>;
+  responseStatus: { value: number | undefined };
 }
 
 function httpContext(headers: Record<string, string>, body: unknown): FakeHttp {
   const responseHeaders: Record<string, string> = {};
+  const responseStatus: { value: number | undefined } = { value: undefined };
   const request = {
     method: "POST",
     originalUrl: "/items",
@@ -61,6 +63,9 @@ function httpContext(headers: Record<string, string>, body: unknown): FakeHttp {
     header: (name: string): string | undefined => headers[name.toLowerCase()],
   };
   const response = {
+    status: (code: number): void => {
+      responseStatus.value = code;
+    },
     setHeader: (name: string, value: string): void => {
       responseHeaders[name] = value;
     },
@@ -73,7 +78,7 @@ function httpContext(headers: Record<string, string>, body: unknown): FakeHttp {
     }),
     getHandler: () => function handler(): void {},
   };
-  return { context: context as ExecutionContext, responseHeaders };
+  return { context: context as ExecutionContext, responseHeaders, responseStatus };
 }
 
 const silentLogger: ILogger = {
@@ -132,13 +137,17 @@ describe("IdempotencyInterceptor", () => {
 
   it("concluida: devolve a resposta original sem executar o handler", async () => {
     store.claimResult = { kind: "completed", responseStatus: 201, responseBody: { id: "1" } };
-    const { context, responseHeaders } = httpContext({ "idempotency-key": "k1" }, body);
+    const { context, responseHeaders, responseStatus } = httpContext(
+      { "idempotency-key": "k1" },
+      body,
+    );
 
     const result = await lastValueFrom(interceptor.intercept(context, handler({ id: "2" })));
 
     expect(result).toEqual({ id: "1" });
     expect(handlerCalls.count).toBe(0);
     expect(responseHeaders["idempotent-replayed"]).toBe("true");
+    expect(responseStatus.value).toBe(201);
   });
 
   it("corpo diferente: 422", async () => {
