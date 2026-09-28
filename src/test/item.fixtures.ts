@@ -1,4 +1,7 @@
-import type { CreateItemProps } from "@domain/entities/item.entity";
+import type {
+  CreateItemProps,
+  RestoreItemProps,
+} from "@domain/entities/item.entity";
 import { ItemEntity } from "@domain/entities/item.entity";
 import type {
   IItemRepository,
@@ -11,7 +14,6 @@ export function buildCreateItemProps(
   overrides: Partial<CreateItemProps> = {},
 ): CreateItemProps {
   return {
-    id: "11111111-1111-4111-8111-111111111111",
     sku: "BOX-001",
     name: "Caixa",
     description: "Caixa de papelao",
@@ -19,6 +21,16 @@ export function buildCreateItemProps(
     weightKg: 1.25,
     dimensions: { lengthCm: 30, widthCm: 20, heightCm: 10.5 },
     createdAt: new Date("2026-09-22T12:00:00.000Z"),
+    ...overrides,
+  };
+}
+
+export function buildRestoreItemProps(
+  overrides: Partial<RestoreItemProps> = {},
+): RestoreItemProps {
+  return {
+    id: "11111111-1111-4111-8111-111111111111",
+    ...buildCreateItemProps(),
     ...overrides,
   };
 }

@@ -32,7 +32,6 @@ describe("e2e: item criado no catalogo chega ao read model do transporte", () =>
   let kafkaContainer: StartedKafkaContainer;
   let catalogDb: StartedPostgreSqlContainer;
   let transportDb: StartedPostgreSqlContainer;
-  let rabbitmq: StartedTestContainer;
   let transport: StartedTestContainer;
   let catalog: RunningCatalogApp;
   let transportUrl: string;
@@ -45,9 +44,12 @@ describe("e2e: item criado no catalogo chega ao read model do transporte", () =>
       GenericContainer.fromDockerfile(TRANSPORT_CONTEXT).withTarget("production").build(),
     ]);
 
-    [kafkaContainer, catalogDb, transportDb, rabbitmq] = await Promise.all([
+    [kafkaContainer, catalogDb, transportDb] = await Promise.all([
+      // Mesma configuracao do docker compose: sem auto-create, topicos
+      // criados explicitamente (o do catalogo aqui; a DLT pelo ms-transport).
       new KafkaContainer("confluentinc/cp-kafka:7.6.1")
         .withKraft()
+        .withEnvironment({ KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false" })
         .withNetwork(network)
         .withNetworkAliases("kafka")
         .start(),
@@ -55,12 +57,6 @@ describe("e2e: item criado no catalogo chega ao read model do transporte", () =>
       new PostgreSqlContainer("postgres:16-alpine")
         .withNetwork(network)
         .withNetworkAliases("transport-db")
-        .start(),
-      new GenericContainer("rabbitmq:3.13-alpine")
-        .withNetwork(network)
-        .withNetworkAliases("rabbitmq")
-        .withEnvironment({ RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit loopback_users []" })
-        .withWaitStrategy(Wait.forLogMessage(/Server startup complete/))
         .start(),
     ]);
 
@@ -81,7 +77,6 @@ describe("e2e: item criado no catalogo chega ao read model do transporte", () =>
       .withEnvironment({
         DATABASE_URL: transportDbUrl,
         KAFKA_BROKER: "kafka:9092",
-        RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672",
         LOG_LEVEL: "warn",
       })
       .withExposedPorts(TRANSPORT_HTTP_PORT)
@@ -100,7 +95,7 @@ describe("e2e: item criado no catalogo chega ao read model do transporte", () =>
   afterAll(async () => {
     await catalog?.app.close();
     await transport?.stop();
-    await Promise.all([kafkaContainer?.stop(), catalogDb?.stop(), transportDb?.stop(), rabbitmq?.stop()]);
+    await Promise.all([kafkaContainer?.stop(), catalogDb?.stop(), transportDb?.stop()]);
     await network?.stop();
   });
 

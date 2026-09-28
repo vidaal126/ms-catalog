@@ -8,11 +8,11 @@ read model de itens.
 
 Camadas hexagonais, com dependências apontando para dentro:
 
-- `src/domain`: entidade `ItemEntity` (registra o evento de domínio
-  `ItemCreated`), value object `Dimensions` e hierarquia de erros de domínio.
-  Não depende de Nest, Prisma nem Kafka.
-- `src/application`: use cases (`CreateItem`, `GetItem`, `ListItems`) e ports
-  (`IdGenerator`).
+- `src/domain`: entidade `ItemEntity` (gera o próprio id com `randomUUID` e
+  registra o evento de domínio `ItemCreated`), value object `Dimensions` e
+  hierarquia de erros de domínio. Não depende de Nest, Prisma nem Kafka.
+- `src/application`: use cases (`CreateItem`, `GetItem`, `ListItems`), também
+  sem dependência de Nest; a composição fica em `ItemModule` (`useFactory`).
 - `src/infrastructure`: HTTP (controller, DTOs, filtro global de exceções,
   Idempotency-Key), Prisma (repositório e outbox), messaging (`MessagingModule`)
   e health checks.
@@ -41,19 +41,19 @@ docker compose up -d --build
 | Kafka UI | http://localhost:8090 |
 | Postgres catálogo | localhost:5433 |
 | Postgres transporte | localhost:5435 |
-| RabbitMQ | localhost:5672 (painel em http://localhost:15672) |
 
 Os jobs `catalog-migrate` e `transport-migrate` aplicam as migrations antes de
 cada app subir; `kafka-init` cria `catalog.ItemCreated` e
 `catalog.ItemCreated.DLT` com retenção infinita.
 
-Não suba junto com o `docker-compose.yml` do próprio `ms-transport`: as portas
-do Postgres e do RabbitMQ são as mesmas.
+O broker roda com auto-create de tópicos desligado: todo tópico vem do
+`kafka-init`. Um nome de tópico errado falha, em vez de criar um tópico novo
+silenciosamente.
 
 ### Apps no host, infraestrutura em container
 
 ```bash
-docker compose up -d catalog-db transport-db kafka kafka-init rabbitmq kafka-ui
+docker compose up -d catalog-db transport-db kafka kafka-init kafka-ui
 cp .env.example .env
 corepack yarn@1.22.22 install
 npx prisma migrate deploy

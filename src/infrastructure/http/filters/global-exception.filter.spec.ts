@@ -50,7 +50,7 @@ describe("GlobalExceptionFilter", () => {
   it.each([
     [new ItemNotFoundError("x"), HttpStatus.NOT_FOUND],
     [new ItemAlreadyExistsError("BOX-001"), HttpStatus.CONFLICT],
-    [new InvalidItemPriceError(), HttpStatus.UNPROCESSABLE_ENTITY],
+    [new InvalidItemPriceError("unitPrice must be at least 0.01"), HttpStatus.UNPROCESSABLE_ENTITY],
     [new InvalidDimensionsError("lengthCm invalido"), HttpStatus.UNPROCESSABLE_ENTITY],
   ])("mapeia %p para %p", (error, status) => {
     const { status: sent, body } = run(error);

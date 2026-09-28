@@ -9,7 +9,8 @@ import { toOutboundMessage } from "./outbox-message.mapper";
 
 describe("ItemCreated no outbox -> mensagem Kafka", () => {
   const props = buildCreateItemProps();
-  const [event] = ItemEntity.create(props).pullDomainEvents();
+  const item = ItemEntity.create(props);
+  const [event] = item.pullDomainEvents();
   if (!event) throw new Error("ItemCreated nao registrado");
 
   const data = toOutboxEventData(event, { correlationId: "corr-1" });
@@ -22,7 +23,7 @@ describe("ItemCreated no outbox -> mensagem Kafka", () => {
     schemaVersion: data.schemaVersion,
     correlationId: data.correlationId,
     payload: {
-      id: props.id,
+      id: item.id,
       sku: props.sku,
       name: props.name,
       unitPrice: props.unitPrice,
@@ -35,7 +36,7 @@ describe("ItemCreated no outbox -> mensagem Kafka", () => {
 
   it("grava o registro de outbox sem schemaVersion no payload", () => {
     expect(data).toMatchObject({
-      aggregateId: props.id,
+      aggregateId: item.id,
       eventType: "ItemCreated",
       schemaVersion: ITEM_CREATED_SCHEMA_VERSION,
       correlationId: "corr-1",
@@ -48,7 +49,7 @@ describe("ItemCreated no outbox -> mensagem Kafka", () => {
     const message = toOutboundMessage(row);
 
     expect(message.topic).toBe("catalog.ItemCreated");
-    expect(message.key).toBe(props.id);
+    expect(message.key).toBe(item.id);
     expect(message.headers).toEqual({
       eventType: "ItemCreated",
       schemaVersion: "2",
@@ -60,7 +61,7 @@ describe("ItemCreated no outbox -> mensagem Kafka", () => {
       eventType: "ItemCreated",
       schemaVersion: 2,
       occurredAt: "2026-09-22T12:00:00.000Z",
-      aggregateId: props.id,
+      aggregateId: item.id,
       correlationId: "corr-1",
       payload: row.payload,
     });

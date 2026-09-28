@@ -1,6 +1,6 @@
 import { ItemEntity } from "@domain/entities/item.entity";
 import {
-  buildCreateItemProps,
+  buildRestoreItemProps,
   InMemoryItemRepository,
 } from "../../test/item.fixtures";
 import {
@@ -27,7 +27,7 @@ describe("ListItemsUseCase", () => {
     const repository = new InMemoryItemRepository();
     for (let i = 0; i < 3; i++) {
       repository.items.push(
-        ItemEntity.restore(buildCreateItemProps({ id: `id-${i}`, sku: `SKU-${i}` })),
+        ItemEntity.restore(buildRestoreItemProps({ id: `id-${i}`, sku: `SKU-${i}` })),
       );
     }
 

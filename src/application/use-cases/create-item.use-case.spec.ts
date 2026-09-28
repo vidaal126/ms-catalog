@@ -1,12 +1,7 @@
-import type { IdGenerator } from "@application/ports/id-generator.port";
 import { ItemAlreadyExistsError } from "@domain/errors/item.errors";
 import { ItemCreatedEvent } from "@domain/events/item-created.event";
 import { InMemoryItemRepository } from "../../test/item.fixtures";
 import { CreateItemInput, CreateItemUseCase } from "./create-item.use-case";
-
-const GENERATED_ID = "22222222-2222-4222-8222-222222222222";
-
-const fixedIdGenerator: IdGenerator = { generate: () => GENERATED_ID };
 
 const input: CreateItemInput = {
   sku: "BOX-001",
@@ -22,20 +17,20 @@ describe("CreateItemUseCase", () => {
 
   beforeEach(() => {
     repository = new InMemoryItemRepository();
-    useCase = new CreateItemUseCase(repository, fixedIdGenerator);
+    useCase = new CreateItemUseCase(repository);
   });
 
-  it("cria o item com id do IdGenerator e entrega o evento ao repositorio", async () => {
+  it("cria o item com id gerado no dominio e entrega o evento ao repositorio", async () => {
     const item = await useCase.execute(input, { correlationId: "corr-1" });
 
-    expect(item.id).toBe(GENERATED_ID);
+    expect(item.id).toEqual(expect.any(String));
     expect(repository.items).toEqual([item]);
     expect(repository.contexts).toEqual([{ correlationId: "corr-1" }]);
 
     const events = item.pullDomainEvents();
     expect(events).toHaveLength(1);
     expect(events[0]).toBeInstanceOf(ItemCreatedEvent);
-    expect(events[0]?.aggregateId).toBe(GENERATED_ID);
+    expect(events[0]?.aggregateId).toBe(item.id);
   });
 
   it("propaga ItemAlreadyExistsError do repositorio", async () => {
