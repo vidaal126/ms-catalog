@@ -1,5 +1,7 @@
 # ms-catalog
 
+> Plataforma: [ms-platform](https://github.com/vidaal126/ms-platform#readme) · [ms-gateway](https://github.com/vidaal126/ms-gateway#readme) · [ms-auth](https://github.com/vidaal126/ms-auth#readme) · **ms-catalog** · [ms-transport](https://github.com/vidaal126/ms-transport#readme) · [ms-customer](https://github.com/vidaal126/ms-customer#readme) · [ms-sales-order](https://github.com/vidaal126/ms-sales-order#readme)
+
 Microsserviço de catálogo de itens (NestJS, Prisma, PostgreSQL, Kafka). É o
 produtor do evento `ItemCreated`, consumido pelo `ms-transport` para montar o
 read model de itens.
@@ -25,7 +27,7 @@ no Kafka, marcando como publicado só depois do envio (at-least-once).
 
 O ambiente compartilhado (Postgres com os databases `catalog` e `transport`,
 Kafka, Kafka UI e os dois serviços) fica no repositório irmão
-[`../ms-platform`](../ms-platform/README.md).
+[`../ms-platform`](https://github.com/vidaal126/ms-platform#readme).
 
 ### Tudo em container
 
@@ -173,6 +175,9 @@ leva cerca de 10 minutos por causa do build.
 
 ## Limitações conhecidas
 
+- **Ordem por agregado no outbox**: os eventos saem na ordem de gravação
+  (`sequence`). Se o envio de um evento falha, os seguintes do mesmo
+  agregado esperam o próximo ciclo; os de outros agregados seguem.
 - **Entrega at-least-once**: se o processo cair entre publicar no Kafka e
   marcar o evento no outbox, ele é reenviado. O `eventId` é estável para o
   consumidor deduplicar.
