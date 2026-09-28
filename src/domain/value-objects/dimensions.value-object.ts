@@ -1,9 +1,6 @@
-export class InvalidDimensionsError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "InvalidDimensionsError";
-  }
-}
+import { InvariantViolationError } from "@domain/errors/domain.error";
+
+export class InvalidDimensionsError extends InvariantViolationError {}
 
 export interface DimensionsProps {
   readonly lengthCm: number;

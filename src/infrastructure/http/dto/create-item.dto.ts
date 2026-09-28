@@ -47,8 +47,11 @@ export class CreateItemDto {
   @MaxLength(2000)
   readonly description?: string;
 
+  // Mesmo limite do DECIMAL(10,2) validado no dominio: fora dele e 400 aqui,
+  // nao 422 do dominio.
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
+  @Max(99_999_999.99)
   @Type(() => Number)
   readonly unitPrice!: number;
 

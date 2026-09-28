@@ -1,9 +1,5 @@
-import { ConflictException, Inject, Injectable } from "@nestjs/common";
-import { ItemEntity } from "../../domain/entities/item.entity";
-import {
-  IItemRepository,
-  ITEM_REPOSITORY,
-} from "../../domain/repositories/item.repository";
+import { ItemEntity } from "@domain/entities/item.entity";
+import type { IItemRepository } from "@domain/repositories/item.repository";
 
 export interface CreateItemDimensionsInput {
   readonly lengthCm: number;
@@ -20,18 +16,20 @@ export interface CreateItemInput {
   readonly dimensions: CreateItemDimensionsInput;
 }
 
-@Injectable()
+export interface CreateItemContext {
+  readonly correlationId: string;
+}
+
 export class CreateItemUseCase {
-  constructor(
-    @Inject(ITEM_REPOSITORY) private readonly itemRepository: IItemRepository,
-  ) {}
+  constructor(private readonly itemRepository: IItemRepository) {}
 
-  async execute(input: CreateItemInput): Promise<ItemEntity> {
-    const existing = await this.itemRepository.findBySku(input.sku);
-    if (existing) {
-      throw new ConflictException(`Item com SKU ${input.sku} já existe`);
-    }
-
+  // SKU duplicado nao e pre-checado aqui: a constraint unica do banco e a
+  // unica fonte de verdade (sem janela de corrida) e o repositorio traduz a
+  // violacao para ItemAlreadyExistsError.
+  async execute(
+    input: CreateItemInput,
+    context: CreateItemContext,
+  ): Promise<ItemEntity> {
     const item = ItemEntity.create({
       sku: input.sku,
       name: input.name,
@@ -42,6 +40,10 @@ export class CreateItemUseCase {
       createdAt: new Date(),
     });
 
-    return this.itemRepository.create(item);
+    await this.itemRepository.create(item, {
+      correlationId: context.correlationId,
+    });
+
+    return item;
   }
 }

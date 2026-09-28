@@ -1,45 +1,43 @@
 import {
   Inject,
   Injectable,
-  type OnModuleDestroy,
+  type OnApplicationShutdown,
   type OnModuleInit,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Kafka, Partitioners, type Producer } from "kafkajs";
+import { type Kafka, Partitioners, type Producer } from "kafkajs";
 import { type ILogger, LOGGER_TOKEN } from "@common/logger/logger.interface";
+import { withTimeout } from "@common/with-timeout";
+import type { OutboundMessage } from "./event-envelope";
+import { KAFKA_CLIENT } from "./kafka.tokens";
 
-const CONNECTION_TIMEOUT_MS = 3_000;
-const REQUEST_TIMEOUT_MS = 30_000;
+interface ProducerEnv {
+  KAFKA_SEND_TIMEOUT_MS: number;
+}
 
 @Injectable()
-export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
-  private readonly kafka: Kafka;
+export class KafkaProducerService
+  implements OnModuleInit, OnApplicationShutdown
+{
   private readonly producer: Producer;
   private isConnected = false;
   private connecting: Promise<void> | null = null;
+  private readonly sendTimeoutMs: number;
 
   constructor(
-    config: ConfigService,
+    @Inject(KAFKA_CLIENT) kafka: Kafka,
     @Inject(LOGGER_TOKEN) private readonly logger: ILogger,
+    config: ConfigService<ProducerEnv, true>,
   ) {
-    this.kafka = new Kafka({
-      clientId: "ms-catalog",
-      brokers: [config.get<string>("KAFKA_BROKER", "localhost:9092")],
-      // Timeout explícito por tentativa: sem ele o socket fica pendurado
-      // esperando a rede responder eventualmente.
-      connectionTimeout: CONNECTION_TIMEOUT_MS,
-      requestTimeout: REQUEST_TIMEOUT_MS,
-      retry: {
-        initialRetryTime: 300,
-        retries: 8,
-      },
-    });
-
-    this.producer = this.kafka.producer({
+    // Sem anotacao: atribuir direto ao campo tipado deixaria o get inferir o
+    // retorno pelo contexto, sem checagem.
+    const sendTimeoutMs = config.get("KAFKA_SEND_TIMEOUT_MS", { infer: true });
+    this.sendTimeoutMs = sendTimeoutMs;
+    this.producer = kafka.producer({
       idempotent: true,
       // O producer idempotente exige retries ilimitados - qualquer teto invalida
       // a garantia de não-duplicação do broker, e o kafkajs avisa disso se ele
-      // herdar o retries: 8 do client acima.
+      // herdar o retries: 8 do client (KafkaClientFactory).
       retry: { retries: Number.MAX_SAFE_INTEGER },
       // Explícito para fixar o particionador da v2 e silenciar o warning de
       // migração do kafkajs. É o mesmo comportamento padrão desde a v2.0.0.
@@ -63,28 +61,44 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
     void this.connect().catch((): void => undefined);
   }
 
-  async onModuleDestroy(): Promise<void> {
+  // onApplicationShutdown roda depois de todos os onModuleDestroy: o outbox
+  // publisher ja parou e terminou o ciclo em andamento quando chegamos aqui.
+  async onApplicationShutdown(): Promise<void> {
     await this.producer.disconnect();
   }
 
-  async sendMessage(
-    topic: string,
-    key: string,
-    value: Record<string, unknown>,
-  ): Promise<void> {
+  // Com retries ilimitados um envio pode nunca terminar (broker fora, lider
+  // indisponivel) e travaria o outbox inteiro. O timeout transforma isso em
+  // falha comum: o publisher deixa o evento pendente e tenta no proximo tick.
+  // O envio original segue vivo no kafkajs; se completar depois, o reenvio
+  // gera duplicata, que o consumer deduplica pelo eventId.
+  async send(message: OutboundMessage): Promise<void> {
+    await withTimeout(
+      this.connectAndSend(message),
+      this.sendTimeoutMs,
+      `Kafka send timeout (topic=${message.topic})`,
+    );
+  }
+
+  private async connectAndSend(message: OutboundMessage): Promise<void> {
     await this.connect();
 
-    this.logger.log(`Sending message to topic ${topic} with key ${key}`);
+    this.logger.log(
+      `Sending message to topic ${message.topic} with key ${message.key}`,
+    );
     await this.producer.send({
-      topic,
+      topic: message.topic,
       messages: [
         {
-          key,
-          value: JSON.stringify(value),
+          key: message.key,
+          value: message.value,
+          headers: { ...message.headers },
         },
       ],
     });
-    this.logger.log(`Message sent to topic ${topic} with key ${key}`);
+    this.logger.log(
+      `Message sent to topic ${message.topic} with key ${message.key}`,
+    );
   }
 
   private async connect(): Promise<void> {
@@ -98,8 +112,9 @@ export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
         this.isConnected = true;
         this.logger.log("Kafka producer conectado");
       })
-      .catch((err: Error): never => {
-        this.logger.error("Falha ao conectar o Kafka producer", err, {
+      .catch((err: unknown): never => {
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.logger.error("Falha ao conectar o Kafka producer", error, {
           service: KafkaProducerService.name,
           method: "connect",
         });

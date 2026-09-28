@@ -4,3 +4,4 @@ dist
 .env
 
 src/infrastructure/database/generated
+coverage
