@@ -115,7 +115,7 @@ export abstract class KafkaConsumerBase
         maxRetryTime: retry.maxRetryTimeMs,
         // Esgotado o retry, o KafkaJS crasha o consumer e o reinicia (o
         // offset da mensagem com falha nao foi commitado: ela volta).
-        restartOnFailure: async (): Promise<boolean> => true,
+        restartOnFailure: (): Promise<boolean> => Promise.resolve(true),
       },
     });
     this.consumer = consumer;

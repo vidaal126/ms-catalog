@@ -87,8 +87,9 @@ export class KafkaProducerService
         this.isConnected = true;
         this.logger.log("Kafka producer conectado");
       })
-      .catch((err: Error): never => {
-        this.logger.error("Falha ao conectar o Kafka producer", err, {
+      .catch((err: unknown): never => {
+        const error = err instanceof Error ? err : new Error(String(err));
+        this.logger.error("Falha ao conectar o Kafka producer", error, {
           service: KafkaProducerService.name,
           method: "connect",
         });

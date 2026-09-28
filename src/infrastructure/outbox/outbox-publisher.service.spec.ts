@@ -61,7 +61,7 @@ describe("OutboxPublisherService shutdown", () => {
     };
     const values: Partial<Env> = { OUTBOX_POLL_INTERVAL_MS: 10, OUTBOX_BATCH_SIZE: 20 };
     const config: Pick<ConfigService<Env, true>, "get"> = {
-      get: ((key: keyof Env) => values[key]) as ConfigService<Env, true>["get"],
+      get: ((key: keyof Env) => values[key]),
     };
 
     const publisher = new OutboxPublisherService(

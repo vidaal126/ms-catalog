@@ -1,5 +1,6 @@
 import {
   decideForExistingKey,
+  type ExistingKeyDecision,
   IDEMPOTENCY_STATUS,
   type IdempotencyRecord,
 } from "./idempotency.policy";
@@ -28,7 +29,7 @@ const completed = (overrides: Partial<IdempotencyRecord> = {}): IdempotencyRecor
   });
 
 describe("decideForExistingKey", () => {
-  const decide = (r: IdempotencyRecord, hash = "hash-a") =>
+  const decide = (r: IdempotencyRecord, hash = "hash-a"): ExistingKeyDecision =>
     decideForExistingKey(r, hash, NOW, LOCK_TIMEOUT_MS);
 
   it("mesmo corpo e concluida: devolve a resposta original", () => {
