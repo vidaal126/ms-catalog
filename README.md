@@ -23,49 +23,43 @@ no Kafka, marcando como publicado só depois do envio (at-least-once).
 
 ## Como subir
 
+O ambiente compartilhado (Postgres com os databases `catalog` e `transport`,
+Kafka, Kafka UI e os dois serviços) fica no repositório irmão
+[`../ms-platform`](../ms-platform/README.md).
+
 ### Tudo em container
 
-O `docker-compose.yml` deste repositório sobe os dois serviços (o
-`ms-transport` é buildado a partir de `../ms-transport`) e toda a
-infraestrutura:
-
 ```bash
-docker compose up -d --build
+cd ../ms-platform && docker compose up -d --build
 ```
 
 | Serviço | Endereço no host |
 |---|---|
-| ms-catalog | http://localhost:3000 (`CATALOG_PORT`) |
-| ms-transport | http://localhost:3001 (`TRANSPORT_PORT`) |
+| ms-catalog | http://localhost:3000 |
+| ms-transport | http://localhost:3001 |
 | Kafka | localhost:9092 |
 | Kafka UI | http://localhost:8090 |
-| Postgres catálogo | localhost:5433 |
-| Postgres transporte | localhost:5435 |
+| Postgres (databases `catalog` e `transport`) | localhost:5433 |
 
-Os jobs `catalog-migrate` e `transport-migrate` aplicam as migrations antes de
-cada app subir; `kafka-init` cria `catalog.ItemCreated` e
-`catalog.ItemCreated.DLT` com retenção infinita.
+O job `catalog-migrate` aplica as migrations antes do app subir; `kafka-init`
+cria `catalog.ItemCreated` e `catalog.ItemCreated.DLT` com retenção infinita.
+O broker roda com auto-create de tópicos desligado.
 
-O broker roda com auto-create de tópicos desligado: todo tópico vem do
-`kafka-init`. Um nome de tópico errado falha, em vez de criar um tópico novo
-silenciosamente.
-
-### Apps no host, infraestrutura em container
+### App no host, infraestrutura em container
 
 ```bash
-docker compose up -d catalog-db transport-db kafka kafka-init kafka-ui
+(cd ../ms-platform && docker compose up -d postgres kafka kafka-init kafka-ui)
 cp .env.example .env
-corepack yarn@1.22.22 install
-npx prisma migrate deploy
-corepack yarn@1.22.22 start
+yarn install
+yarn prisma migrate deploy
+yarn start
 ```
 
 O Kafka tem dois listeners: containers usam `kafka:29092` (o compose já
 configura) e apps no host usam `localhost:9092` (o `.env`).
 
-O projeto usa Yarn 1 (`yarn.lock` v1). Se o `yarn` global for o Yarn 4, use
-`corepack yarn@1.22.22`: o Yarn 4 converte o projeto para PnP e esvazia o
-`node_modules`.
+O projeto fixa Yarn 1 (`packageManager: yarn@1.22.22`, `yarn.lock` v1); com
+corepack habilitado, `yarn` resolve para essa versão.
 
 ## Variáveis de ambiente
 
@@ -140,7 +134,7 @@ envelope com `eventId`; o `ms-transport` aceita os dois formatos.
 ### Massa de teste do tópico
 
 ```bash
-corepack yarn@1.22.22 seed:topic
+yarn seed:topic
 ```
 
 Publica 2 eventos legados, 1 mensagem inválida e o BOX-001 em v1 (replay
@@ -148,8 +142,8 @@ esperado no `ms-transport`: 1 item e 3 mensagens na DLT). Aborta se o tópico j�
 tiver mensagens; para recriar:
 
 ```bash
-docker exec catalog-kafka kafka-topics --bootstrap-server localhost:29092 --delete --topic catalog.ItemCreated
-corepack yarn@1.22.22 seed:topic
+docker compose -f ../ms-platform/docker-compose.yml exec kafka kafka-topics --bootstrap-server kafka:29092 --delete --topic catalog.ItemCreated
+yarn seed:topic
 ```
 
 ### Inspecionar a DLT
@@ -158,16 +152,18 @@ A DLT é do `ms-transport` (`catalog.ItemCreated.DLT`). Pela Kafka UI
 (http://localhost:8090) ou:
 
 ```bash
-docker exec catalog-kafka kafka-console-consumer --bootstrap-server localhost:29092 \
+docker compose -f ../ms-platform/docker-compose.yml exec kafka kafka-console-consumer --bootstrap-server kafka:29092 \
   --topic catalog.ItemCreated.DLT --from-beginning --property print.headers=true
 ```
 
 ## Testes
 
 ```bash
-corepack yarn@1.22.22 test              # unitários
-corepack yarn@1.22.22 test:integration  # Postgres e Kafka reais (testcontainers)
-corepack yarn@1.22.22 test:e2e          # catálogo -> Kafka -> read model do ms-transport
+yarn lint              # eslint + typescript-eslint (strictTypeChecked)
+yarn typecheck         # tsc --noEmit
+yarn test              # unitários
+yarn test:integration  # Postgres e Kafka reais (testcontainers)
+yarn test:e2e          # catálogo -> Kafka -> read model do ms-transport
 ```
 
 Integração e e2e precisam de Docker. O e2e builda as imagens do `ms-transport`
@@ -189,3 +185,7 @@ leva cerca de 10 minutos por causa do build.
   configurar `trust proxy`.
 - **Readiness depende do Kafka**: com o broker fora a API ainda aceitaria
   criações (o outbox acumula), mas o readiness fica 503.
+- **SIGTERM com o broker fora**: o ciclo do outbox em andamento fica preso no
+  `connect` do producer (retries ilimitados), então o shutdown só termina pelo
+  `SHUTDOWN_TIMEOUT_MS` (exit 1). Nenhum evento se perde: as linhas continuam
+  pendentes no outbox e são publicadas no próximo start.
