@@ -16,6 +16,9 @@ model Item {
 
 model OutboxEvent {
   id          String    @id @default(uuid())
+  // Ordem de insercao garantida pelo banco: createdAt pode empatar (mesmo
+  // milissegundo) e nao ordena eventos do mesmo agregado de forma estavel.
+  sequence    BigInt    @default(autoincrement()) @unique
   aggregateId String
   eventType     String
   schemaVersion Int

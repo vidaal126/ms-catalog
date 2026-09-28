@@ -18,6 +18,7 @@ describe("ItemCreated no outbox -> mensagem Kafka", () => {
   // Simula a linha como o Prisma a devolve depois de gravada.
   const row: OutboxEvent = {
     id: "33333333-3333-4333-8333-333333333333",
+    sequence: 1n,
     aggregateId: data.aggregateId,
     eventType: data.eventType,
     schemaVersion: data.schemaVersion,

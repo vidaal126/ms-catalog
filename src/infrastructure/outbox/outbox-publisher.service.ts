@@ -27,6 +27,12 @@ import { OutboxRepository } from "./outbox.repository";
 // verdade no meio - por isso consumidores desse evento PRECISAM ser
 // idempotentes (o eventId do envelope é estável entre reenvios).
 //
+// Ordem por agregado: se o envio de um evento falha, os eventos seguintes
+// do mesmo aggregateId ficam pendentes neste ciclo (publicar o evento N+1
+// antes do N quebraria a ordem por chave no topico). Outros agregados
+// seguem publicando normalmente; o proximo tick tenta de novo desde o
+// evento que falhou.
+//
 // Shutdown: onModuleDestroy para o polling, interrompe o lote entre um
 // evento e outro e aguarda o ciclo em andamento marcar o que já foi enviado.
 // Producer e Prisma só desconectam depois, em onApplicationShutdown.
@@ -78,9 +84,11 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
       const pending = await this.outbox.findPending(this.batchSize);
 
       const publishedIds: string[] = [];
+      const blockedAggregates = new Set<string>();
 
       for (const event of pending) {
         if (this.stopping) break;
+        if (blockedAggregates.has(event.aggregateId)) continue;
 
         try {
           await this.kafkaProducer.send(toOutboundMessage(event));
@@ -93,8 +101,9 @@ export class OutboxPublisherService implements OnModuleInit, OnModuleDestroy {
             { eventId: event.id, correlationId: event.correlationId },
           );
         } catch (err) {
+          blockedAggregates.add(event.aggregateId);
           this.logger.error(
-            `Falha ao publicar evento ${event.id}`,
+            `Falha ao publicar evento ${event.id} (aggregateId=${event.aggregateId})`,
             toError(err),
           );
         }
