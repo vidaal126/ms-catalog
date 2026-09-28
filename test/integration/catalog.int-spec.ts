@@ -6,6 +6,8 @@ import { sampleValue } from "../../src/test/metrics.helpers";
 import { KafkaTestClient, waitFor } from "../support/kafka-test-client";
 
 const TOPIC = "catalog.ItemCreated";
+// Acima dos POSTs feitos pelos outros testes (sem X-Forwarded-For).
+const CREATE_ITEM_LIMIT = 10;
 
 const itemResponseSchema = z.object({ id: z.uuid(), sku: z.string() });
 
@@ -60,6 +62,7 @@ describe("ms-catalog: criacao de item e publicacao via outbox (integracao)", () 
       DATABASE_URL: postgres.getConnectionUri(),
       KAFKA_BROKER: broker,
       OUTBOX_POLL_INTERVAL_MS: "200",
+      THROTTLE_CREATE_ITEM_LIMIT: String(CREATE_ITEM_LIMIT),
     });
   });
 
@@ -148,5 +151,20 @@ describe("ms-catalog: criacao de item e publicacao via outbox (integracao)", () 
     ).toBeGreaterThanOrEqual(1);
     expect(sampleValue(text, "outbox_events_published_total", { event_type: "ItemCreated", service: "ms-catalog" })).toBe(2);
     expect(sampleValue(text, "outbox_pending_events", {})).toBe(0);
+  });
+
+  // Roda por ultimo: esgota o balde de POST /items de um cliente. Corpo
+  // invalido (400) para nao gravar itens nem eventos no outbox.
+  it("throttler conta por cliente (X-Forwarded-For do gateway), nao pelo proxy", async () => {
+    const createFrom = async (clientIp: string): Promise<number> => {
+      const response = await postJson(`${running.baseUrl}/items`, {}, { "x-forwarded-for": clientIp });
+      return response.status;
+    };
+
+    for (let attempt = 0; attempt < CREATE_ITEM_LIMIT; attempt++) {
+      expect(await createFrom("203.0.113.10")).toBe(400);
+    }
+    expect(await createFrom("203.0.113.10")).toBe(429);
+    expect(await createFrom("203.0.113.20")).toBe(400);
   });
 });

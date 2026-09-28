@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import type { INestApplication } from "@nestjs/common";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 
 export interface RunningCatalogApp {
-  readonly app: INestApplication;
+  readonly app: NestExpressApplication;
   readonly baseUrl: string;
 }
 
@@ -23,7 +23,7 @@ export async function startCatalogApp(env: Record<string, string>): Promise<Runn
   const { AppModule } = await import("../../src/app.module");
   const { configureApp } = await import("../../src/app.setup");
 
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: false });
   configureApp(app);
   await app.listen(0);
   const baseUrl = (await app.getUrl()).replace("[::1]", "localhost");

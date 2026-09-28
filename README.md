@@ -182,8 +182,11 @@ leva cerca de 10 minutos por causa do build.
 - **Idempotency-Key**: se o processo cair depois de criar o item e antes de
   gravar a resposta, uma nova tentativa (após o lock vencer) recebe 409 de SKU
   duplicado em vez do 201 original.
-- **Rate limit em memória**: vale por réplica; atrás de proxy é preciso
-  configurar `trust proxy`.
+- **Rate limit em memória**: vale por réplica. O `trust proxy` confia em
+  exatamente 1 salto (o ms-gateway, que anexa o IP do cliente ao
+  `X-Forwarded-For`), então o limite conta por cliente e não pelo IP do
+  gateway. Acessar o serviço direto, sem o gateway, permite escolher o IP
+  contado via `X-Forwarded-For`.
 - **Readiness depende do Kafka**: com o broker fora a API ainda aceitaria
   criações (o outbox acumula), mas o readiness fica 503.
 - **Envio com timeout**: o producer tem retries ilimitados (exigência do modo
