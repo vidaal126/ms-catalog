@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "@common/logger/logger.module";
 import { type Env, readEnv, validateEnv } from "@config/env";
+import { MetricsModule } from "@infrastructure/metrics/metrics.module";
 import { PrismaModule } from "@infrastructure/database/prisma/prisma.module";
 import { HealthModule } from "@infrastructure/health/health.module";
 import { GlobalExceptionFilter } from "@infrastructure/http/filters/global-exception.filter";
@@ -30,6 +31,7 @@ import { ItemModule } from "@infrastructure/item.module";
         ],
       }),
     }),
+    MetricsModule,
     PrismaModule,
     HealthModule,
     ItemModule,

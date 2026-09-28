@@ -6,6 +6,7 @@ import type { OutboundMessage } from "@infrastructure/messaging/event-envelope";
 import type { KafkaProducerService } from "@infrastructure/messaging/kafka-producer.service";
 import { OutboxPublisherService } from "./outbox-publisher.service";
 import type { OutboxRepository } from "./outbox.repository";
+import { MetricsService } from "@infrastructure/metrics/metrics.service";
 
 function outboxEvent(id: string): OutboxEvent {
   return {
@@ -68,6 +69,7 @@ describe("OutboxPublisherService shutdown", () => {
       outbox as OutboxRepository,
       producer as KafkaProducerService,
       silentLogger,
+      new MetricsService(),
       config as ConfigService<Env, true>,
     );
 

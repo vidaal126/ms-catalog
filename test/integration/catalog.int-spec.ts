@@ -2,6 +2,7 @@ import { KafkaContainer, type StartedKafkaContainer } from "@testcontainers/kafk
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { z } from "zod";
 import { migrateDatabase, postJson, type RunningCatalogApp, startCatalogApp } from "../support/catalog-app";
+import { sampleValue } from "../../src/test/metrics.helpers";
 import { KafkaTestClient, waitFor } from "../support/kafka-test-client";
 
 const TOPIC = "catalog.ItemCreated";
@@ -135,5 +136,17 @@ describe("ms-catalog: criacao de item e publicacao via outbox (integracao)", () 
     );
     const messages = await kafka.readFromBeginning(TOPIC, 3, 5_000);
     expect(messages).toHaveLength(2);
+  });
+
+  it("GET /metrics expoe latencia por rota e eventos publicados pelo outbox", async () => {
+    const response = await fetch(`${running.baseUrl}/metrics`);
+    const text = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(
+      sampleValue(text, "http_request_duration_seconds_count", { method: "POST", route: "/items", status_code: "201" }),
+    ).toBeGreaterThanOrEqual(1);
+    expect(sampleValue(text, "outbox_events_published_total", { event_type: "ItemCreated", service: "ms-catalog" })).toBe(2);
+    expect(sampleValue(text, "outbox_pending_events", {})).toBe(0);
   });
 });
